@@ -52,12 +52,12 @@ jobs:
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          if [ -f "gradlew" ] && [ -f "gradle/wrapper/gradle-wrapper.jar" ]; then
-            chmod +x gradlew
-            ./gradlew make makePluginsJson --stacktrace || ./gradlew make --stacktrace
-          else
-            gradle make makePluginsJson --stacktrace || gradle make --stacktrace
-          fi
+          chmod +x gradlew
+          ./gradlew makePluginsJson --stacktrace || ./gradlew make --stacktrace || ./gradlew build --stacktrace
+          
+          # Bring all generated .cs3 files from submodules to the root folder
+          find . -name "*.cs3" ! -path "./.git/*" -exec cp {} ./ \;
+          ls -la *.cs3 || echo "No .cs3 files found yet"
 
       - name: Ensure Real Plugin Names, Official Logos & Valid Hashes
         run: |
@@ -154,6 +154,6 @@ jobs:
           if git diff-index --quiet HEAD --; then
             echo "No changes to commit."
           else
-            git commit -m "Automated Allanime build: ${{ github.sha }}"
+            git commit -m "Automated build: ${{ github.sha }}"
             git push origin builds --force
           fi
