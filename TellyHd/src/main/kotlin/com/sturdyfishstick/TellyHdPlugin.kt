@@ -1,4 +1,4 @@
-package com.sturdyfishstick
+package com.sturdyfishstick.tellyhd
 
 import android.content.Context
 import com.fasterxml.jackson.annotation.JsonProperty
