@@ -54,9 +54,9 @@ jobs:
         run: |
           if [ -f "gradlew" ] && [ -f "gradle/wrapper/gradle-wrapper.jar" ]; then
             chmod +x gradlew
-            ./gradlew make --stacktrace
+            ./gradlew make makePluginsJson --stacktrace || ./gradlew make --stacktrace
           else
-            gradle make --stacktrace
+            gradle make makePluginsJson --stacktrace || gradle make --stacktrace
           fi
 
       - name: Ensure Real Plugin Names, Official Logos & Valid Hashes
@@ -88,9 +88,9 @@ jobs:
                   manifest = json.loads(items['manifest.json'].decode('utf-8'))
                   for plugin_key, meta in PLUGIN_META.items():
                       if plugin_key.lower() in base.lower() or manifest.get('internalName', '').lower() == plugin_key.lower():
-                        manifest['name'] = meta['name']
-                        if 'iconUrl' in meta:
-                            manifest['iconUrl'] = meta['iconUrl']
+                          manifest['name'] = meta['name']
+                          if 'iconUrl' in meta:
+                              manifest['iconUrl'] = meta['iconUrl']
                   items['manifest.json'] = json.dumps(manifest, indent=2).encode('utf-8')
                   with zipfile.ZipFile(cs3_file, 'w', zipfile.ZIP_DEFLATED) as zout:
                       for name, data in items.items():
