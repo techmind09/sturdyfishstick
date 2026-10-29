@@ -1,4 +1,4 @@
-package com.sturdyfishstick.tellyhd
+package com.sturdyfishstick
 
 import android.annotation.SuppressLint
 import com.fasterxml.jackson.annotation.JsonProperty
