@@ -18,8 +18,6 @@ class HiWebXSeriesProvider : MainAPI() {
         "" to "Latest",
         "short-films" to "Short Films",
         "series" to "Series",
-        "categories" to "Categories",
-        // Screenshots se add ki gayi Categories:
         "category/9redmovies" to "9redmovies",
         "category/addatv" to "Addatv",
         "category/akkuott" to "Akkuott",
