@@ -9,19 +9,14 @@ dependencyResolutionManagement {
 
 rootProject.name = "CloudstreamPlugins"
 
-// This file sets what projects are included. All new projects should get automatically included unless s
-
+// List any directory names you want to temporarily disable
 val disabled = listOf<String>()
 
-File(rootDir, ".").eachDir { dir ->
-    if (!disabled.contains(dir.name) && File(dir, "build.gradle.kts").exists()) {
-        include(dir.name)
+// Automatically include all directories containing a build.gradle.kts file
+File(rootDir, ".").listFiles()?.forEach { dir ->
+    if (dir.isDirectory && !dir.name.startsWith(".") && !disabled.contains(dir.name)) {
+        if (File(dir, "build.gradle.kts").exists()) {
+            include(dir.name)
+        }
     }
 }
-
-fun File.eachDir(block: (File) -> Unit) {
-    listFiles()?.filter { it.isDirectory }?.forEach { block(it) }
-}
-
-// To only include a single project, comment out the previous lines (except the first one), and include y
-// include ("XXXTime")
