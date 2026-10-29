@@ -9,6 +9,14 @@ dependencyResolutionManagement {
 
 rootProject.name = "CloudstreamPlugins"
 
-include(":TellyHd")
-include(":xVideos")
-include(":Aaagmaal")
+val disabled = listOf<String>()
+
+// Safely check both directory existence and build.gradle.kts existence
+rootProject.projectDir.listFiles()?.forEach { dir ->
+    if (dir.isDirectory && !dir.name.startsWith(".") && !disabled.contains(dir.name)) {
+        val buildFile = File(dir, "build.gradle.kts")
+        if (buildFile.exists()) {
+            include(dir.name)
+        }
+    }
+}
