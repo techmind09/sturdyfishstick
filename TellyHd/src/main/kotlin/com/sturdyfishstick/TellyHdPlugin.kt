@@ -1,4 +1,4 @@
-package com.sturdyfishstick
+package com.sturdyfishstick.tellyhd
 
 import android.content.Context
 import com.fasterxml.jackson.annotation.JsonProperty
@@ -8,7 +8,7 @@ import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
 
 @CloudstreamPlugin
-class TollyProProvider: Plugin() {
+class TellyHdProvider: Plugin() {
     override fun load(context: Context) {
         registerMainAPI(TollyPro())
         registerExtractorAPI(Ds2play())
