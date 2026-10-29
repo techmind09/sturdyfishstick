@@ -1,4 +1,4 @@
-package com.sturdyfishstick
+package com.sturdyfishstick.tellyhd
 
 import android.annotation.SuppressLint
 import com.fasterxml.jackson.annotation.JsonProperty
@@ -22,14 +22,15 @@ class TellyHdProvider : MainAPI() {
         TollyProProvider.getDomains()?.Tellyhd ?: "https://tellyhd.st"
     }
     override var name = "TellyHD"
-    override val hasMainPage= true
-    override var lang= "hi"
-    override val supportedTypes= setOf(TvType.NSFW)
-    override val vpnStatus= VPNStatus.MightBeNeeded
-    val directUrl =""
+    override val hasMainPage = true
+    override var lang = "hi"
+    override val supportedTypes = setOf(TvType.NSFW)
+    override val vpnStatus = VPNStatus.MightBeNeeded
+    val directUrl = ""
+    
     @SuppressLint("NewApi")
     override val mainPage = mainPageOf(
-        release/${Year.now().value}" to "Latest",
+        "release/${Year.now().value}" to "Latest",
         "genre/18plus" to "18+",
         "genre/9redmovie" to "9redmovie",
         "genre/addatv" to "Addatv",
@@ -48,19 +49,18 @@ class TellyHdProvider : MainAPI() {
         "genre/marcdorcel" to "Marc Dorcel",
         "genre/movies" to "Movies",
         "genre/neonx" to "NeonX",
-        "genre/niksindian" to "Niksindian",
-      )
+        "genre/niksindian" to "Niksindian"
+    )
 
     override suspend fun getMainPage(
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
-        val url = if(page == 1) "$mainUrl/${request.data}/" else "$mainUrl/${request.data}/page/$page/"
+        val url = if (page == 1) "$mainUrl/${request.data}/" else "$mainUrl/${request.data}/page/$page/"
         val document = app.get(url).document
-        val home =
-            document.select("div.items.normal article, div#archive-content article, div.items.full article").mapNotNull {
-                it.toSearchResult()
-            }
+        val home = document.select("div.items.normal article, div#archive-content article, div.items.full article").mapNotNull {
+            it.toSearchResult()
+        }
         return newHomePageResponse(request.name, home)
     }
 
@@ -98,14 +98,12 @@ class TellyHdProvider : MainAPI() {
             this.posterUrl = posterUrl
             this.quality = quality
         }
-
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
         val document = app.get("$mainUrl/search/$query").document
         return document.select("div.result-item").map {
-            val title =
-                it.selectFirst("div.title > a")!!.text().replace(Regex("\\(\\d{4}\\)"), "").trim()
+            val title = it.selectFirst("div.title > a")!!.text().replace(Regex("\\(\\d{4}\\)"), "").trim()
             val href = getProperLink(it.selectFirst("div.title > a")!!.attr("href"))
             val posterUrl = it.selectFirst("img")!!.attr("src")
             newMovieSearchResponse(title, href, TvType.TvSeries) {
@@ -117,11 +115,10 @@ class TellyHdProvider : MainAPI() {
     override suspend fun load(url: String): LoadResponse {
         val request = app.get(url)
         val document = request.document
-        val title =
-            document.selectFirst("div.data > h1")?.text()?.trim().toString()
+        val title = document.selectFirst("div.data > h1")?.text()?.trim().toString()
         var posterUrl = fixUrlNull(document.selectFirst("meta[property=og:image]")?.attr("content"))
         if (posterUrl.isNullOrEmpty()) {
-                posterUrl = fixUrlNull(document.select("div.poster img").attr("src"))
+            posterUrl = fixUrlNull(document.select("div.poster img").attr("src"))
         }
         val description = document.select("div.wp-content > p").text().trim()
         val episodes = document
@@ -139,11 +136,10 @@ class TellyHdProvider : MainAPI() {
             }
 
         return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
-                this.posterUrl = posterUrl
-                this.plot = description
-            }
+            this.posterUrl = posterUrl
+            this.plot = description
         }
-
+    }
 
     override suspend fun loadLinks(
         data: String,
@@ -151,20 +147,23 @@ class TellyHdProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-           val loadData = tryParseJson<LinkData>(data)
-           val iframe= app.post(
-           url = "$mainUrl/wp-admin/admin-ajax.php", data = mapOf(
-                  "action" to "doo_player_ajax", "post" to "${loadData?.post}", "nume" to "${loadData?.nume}", "type" to "${loadData?.type}"
-               ), referer = data, headers = mapOf("Accept" to "*/*", "X-Requested-With" to "XMLHttpRequest"
-               )).parsed<ResponseHash>().embedUrl.getIframe()
-            if (!data.contains("youtube")) loadExtractor(
+        val loadData = tryParseJson<LinkData>(data)
+        val iframe = app.post(
+            url = "$mainUrl/wp-admin/admin-ajax.php", data = mapOf(
+                "action" to "doo_player_ajax", "post" to "${loadData?.post}", "nume" to "${loadData?.nume}", "type" to "${loadData?.type}"
+            ), referer = data, headers = mapOf("Accept" to "*/*", "X-Requested-With" to "XMLHttpRequest")
+        ).parsed<ResponseHash>().embedUrl.getIframe()
+        
+        if (!data.contains("youtube")) {
+            loadExtractor(
                 iframe,
                 "$directUrl/",
                 subtitleCallback,
                 callback
             )
-        return true
         }
+        return true
+    }
 
     private fun Element.getImageAttr(): String {
         return when {
@@ -184,6 +183,7 @@ class TellyHdProvider : MainAPI() {
         val post: String? = null,
         val nume: String? = null,
     )
+    
     data class ResponseHash(
         @JsonProperty("embed_url")
         val embedUrl: String,
