@@ -20,5 +20,11 @@ dependencyResolutionManagement {
 rootProject.name = "sturdyfishstick"
 
 include(":Watchporn")
-
 include(":BrazzPw")
+include(":xVideos")
+include(":XmoviesForYou")
+include(":TellyHd")
+include(":Aagmaal")
+include(":FreePornVideos")
+include(":Xhamster")
+include(":XXXTime")
