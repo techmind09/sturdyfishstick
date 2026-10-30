@@ -7,7 +7,7 @@ import java.net.URLEncoder
 
 class WatchOMoviesIndianProvider : MainAPI() {
     override var mainUrl              = "https://watchomovies.study"
-    override var name                 = "WatchoMoviesIndian"
+    override var name                 = "WatchOMovies Indian"
     override val hasMainPage          = true
     override var lang                 = "hi"
     override val hasDownloadSupport   = true
