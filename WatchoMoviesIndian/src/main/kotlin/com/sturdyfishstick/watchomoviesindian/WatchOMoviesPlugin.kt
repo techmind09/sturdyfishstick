@@ -7,6 +7,7 @@ import android.content.Context
 @CloudstreamPlugin
 class WatchOMoviesPlugin : Plugin() {
     override fun load(context: Context) {
-        registerMainAPI(WatchOMovies())
+        // Updated to register WatchOMoviesIndianProvider() correctly
+        registerMainAPI(WatchOMoviesIndianProvider())
     }
 }
