@@ -7,7 +7,7 @@ import java.net.URLEncoder
 
 class WatchOMoviesIndianProvider : MainAPI() {
     override var mainUrl              = "https://watchomovies.study"
-    override var name                 = "WatchOMovies Indian"
+    override var name                 = "WatchOMoviesIndian"
     override val hasMainPage          = true
     override var lang                 = "hi"
     override val hasDownloadSupport   = true
@@ -19,40 +19,40 @@ class WatchOMoviesIndianProvider : MainAPI() {
         "" to "Latest Updates",
         "movies" to "Movies",
         "series" to "Web Series",
-        "tag/ullu-originals" to "Ullu Originals",
-        "tag/fliz-movies" to "Fliz Movies",
-        "tag/nuefliks" to "Nuefliks",
-        "tag/hotshots" to "Hotshots",
-        "tag/hunters" to "Hunters",
-        "tag/moodx" to "MoodX",
-        "tag/voovi" to "VooVi",
-        "tag/primeplay" to "PrimePlay",
-        "tag/besharams" to "Besharams",
-        "tag/kooku" to "Kooku",
-        "tag/gupchup" to "Gupchup",
-        "tag/feneomovies" to "Feneomovies",
-        "tag/cinemadosti" to "Cinemadosti",
-        "tag/primeflix" to "Primeflix",
-        "tag/gemplex" to "Gemplex",
-        "tag/rabbit" to "Rabbit",
-        "tag/hotmasti" to "HotMasti",
-        "tag/mastiprime" to "MastiPrime",
-        "tag/ek-night-show" to "Ek Night Show",
-        "tag/flixskmovies" to "Flixskmovies",
-        "tag/lootlo" to "Lootlo",
-        "tag/hootzy" to "Hootzy",
-        "tag/balloons" to "Balloons",
-        "tag/big-movie-zoo" to "Big Movie Zoo",
-        "tag/bambooflix" to "Bambooflix",
-        "tag/piliflix" to "Piliflix",
-        "tag/11upmovies" to "11upmovies",
-        "tag/eightshots" to "Eightshots",
-        "tag/i-entertainment" to "I-Entertainment",
-        "tag/hotprime" to "Hotprime",
-        "tag/bananaprime" to "BananaPrime",
-        "tag/chikooflix" to "Chikooflix",
-        "tag/glamheart" to "Glamheart",
-        "tag/worldprime" to "Worldprime"
+        "director/ullu-originals" to "Ullu Originals",
+        "director/fliz-movies" to "Fliz Movies",
+        "director/nuefliks" to "Nuefliks",
+        "director/hotshots" to "Hotshots",
+        "director/hunters" to "Hunters",
+        "director/moodx-originals" to "MoodX",
+        "director/voovi" to "VooVi",
+        "director/primeplay" to "PrimePlay",
+        "director/besharams" to "Besharams",
+        "director/kooku" to "Kooku",
+        "director/gupchup" to "Gupchup",
+        "director/feneomovies" to "Feneomovies",
+        "director/cinemadosti" to "Cinemadosti",
+        "director/primeflix" to "Primeflix",
+        "director/gemplex" to "Gemplex",
+        "director/rabbit" to "Rabbit",
+        "director/hotmasti" to "HotMasti",
+        "director/mastiprime" to "MastiPrime",
+        "director/ek-night-show" to "Ek Night Show",
+        "director/flixskmovies" to "Flixskmovies",
+        "director/lootlo" to "Lootlo",
+        "director/hootzy" to "Hootzy",
+        "director/balloons" to "Balloons",
+        "director/big-movie-zoo" to "Big Movie Zoo",
+        "director/bambooflix" to "Bambooflix",
+        "director/piliflix" to "Piliflix",
+        "director/11upmovies" to "11upmovies",
+        "director/eightshots" to "Eightshots",
+        "director/i-entertainment" to "I-Entertainment",
+        "director/hotprime" to "Hotprime",
+        "director/bananaprime" to "BananaPrime",
+        "director/chikooflix" to "Chikooflix",
+        "director/glamheart" to "Glamheart",
+        "director/worldprime" to "Worldprime"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -137,7 +137,7 @@ class WatchOMoviesIndianProvider : MainAPI() {
         val description = document.selectFirst("meta[property=og:description]")?.attr("content")?.trim()
             ?: document.selectFirst(".wp-content p, .entry-content p")?.text()?.trim()
 
-        val tags = document.select(".tags a, .genres a, a[href*='/tag/'], a[href*='/genre/']")
+        val tags = document.select(".tags a, .genres a, a[href*='/tag/'], a[href*='/genre/'], a[href*='/director/']")
             .map { it.text().trim() }
             .filter { it.isNotBlank() }
             .distinct()
