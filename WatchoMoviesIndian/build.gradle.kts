@@ -19,7 +19,7 @@ cloudstream {
     tvTypes = listOf(
         "NSFW"
     )
-    language = "hi"
+    language = "en"
 
     iconUrl = "https://watchomovies.study/"
 }
