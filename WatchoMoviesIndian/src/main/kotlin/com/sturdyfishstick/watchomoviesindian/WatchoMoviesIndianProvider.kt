@@ -5,17 +5,20 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import java.net.URLEncoder
 
-class WatchOMovies : MainAPI() {
+class WatchOMoviesIndianProvider : MainAPI() {
     override var mainUrl              = "https://watchomovies.study"
-    override var name                 = "WatchOMovies"
+    override var name                 = "WatchoMoviesIndian"
     override val hasMainPage          = true
-    override var lang                 = "hi" // Hindi / Multi-language content
+    override var lang                 = "hi"
     override val hasDownloadSupport   = true
     override val hasChromecastSupport = true
     override val supportedTypes       = setOf(TvType.Movie, TvType.TvSeries, TvType.NSFW)
     override val vpnStatus            = VPNStatus.MightBeNeeded
 
     override val mainPage = mainPageOf(
+        "" to "Latest Updates",
+        "movies" to "Movies",
+        "series" to "Web Series",
         "tag/ullu-originals" to "Ullu Originals",
         "tag/fliz-movies" to "Fliz Movies",
         "tag/nuefliks" to "Nuefliks",
@@ -146,21 +149,27 @@ class WatchOMovies : MainAPI() {
         val isSeries = url.contains("series") || document.select(".episodios, .seasons").isNotEmpty()
 
         return if (isSeries) {
-            val episodes = mutableListof<Episode>()
-            // Episode parsing logic if the site lists episodes directly on the page
+            val episodes = mutableListOf<Episode>() // Fixed mutableListof -> mutableListOf
             document.select(".episodios li, .les-content a").forEachIndexed { index, ep ->
                 val epLink = fixUrlNull(ep.attr("href")) ?: url
                 val epTitle = ep.select(".episodiotitle, .servername").text().ifBlank { "Episode ${index + 1}" }
+                
+                // Fixed Episode constructor to newEpisode
                 episodes.add(
-                    Episode(
-                        data = epLink,
-                        name = epTitle,
-                        episode = index + 1
-                    )
+                    newEpisode(epLink) {
+                        this.name = epTitle
+                        this.episode = index + 1
+                    }
                 )
             }
 
-            newTvSeriesLoadResponse(title, url, TvType.TvSeries, if (episodes.isNotEmpty()) episodes else listOf(Episode(url, "Full Movie / Video"))) {
+            val defaultEpisode = listOf(
+                newEpisode(url) {
+                    this.name = "Full Movie / Video"
+                }
+            )
+
+            newTvSeriesLoadResponse(title, url, TvType.TvSeries, if (episodes.isNotEmpty()) episodes else defaultEpisode) {
                 this.posterUrl = poster
                 this.plot = description
                 this.tags = tags
@@ -184,7 +193,6 @@ class WatchOMovies : MainAPI() {
     ): Boolean {
         val document = app.get(data).document
         
-        // Extract iframes, embedded video players, or direct sources
         document.select("iframe, source, video").forEach { element ->
             val src = element.attr("src").ifBlank { element.attr("data-src") }
             if (src.isNotBlank() && !src.contains("ads")) {
@@ -193,8 +201,7 @@ class WatchOMovies : MainAPI() {
             }
         }
 
-        // Extract download or watch links inside the page content
-        document.systemSelectOrNull("a.download, .links_table a, .button.flix, .dooplay_player_option")?.forEach { element ->
+        document.select("a.download, .links_table a, .button.flix, .dooplay_player_option").forEach { element ->
             val href = element.attr("href").ifBlank { element.attr("data-url") }
             if (href.isNotBlank() && !href.startsWith("javascript") && !href.contains("#")) {
                 loadExtractor(fixUrl(href), data, subtitleCallback, callback)
