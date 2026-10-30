@@ -80,9 +80,10 @@ class WatchOMoviesIndianProvider : MainAPI() {
         val linkElem = this.selectFirst("a") ?: return null
         val href = fixUrlNull(linkElem.attr("href")) ?: return null
         val titleText = this.selectFirst(".title, h2, h3, h4, .name")?.text()
-            ?: linkElem.attr("title")
+            ?: linkElem.attr("title").takeIf { it.isNotBlank() }
             ?: linkElem.text()
-        if (titleText.isNullOrBlank()) return null
+            
+        if (titleText.isBlank()) return null
         val title = fixTitle(titleText).trim()
 
         val img = this.selectFirst("img")
@@ -149,12 +150,11 @@ class WatchOMoviesIndianProvider : MainAPI() {
         val isSeries = url.contains("series") || document.select(".episodios, .seasons").isNotEmpty()
 
         return if (isSeries) {
-            val episodes = mutableListOf<Episode>() // Fixed mutableListof -> mutableListOf
+            val episodes = mutableListOf<Episode>()
             document.select(".episodios li, .les-content a").forEachIndexed { index, ep ->
                 val epLink = fixUrlNull(ep.attr("href")) ?: url
                 val epTitle = ep.select(".episodiotitle, .servername").text().ifBlank { "Episode ${index + 1}" }
                 
-                // Fixed Episode constructor to newEpisode
                 episodes.add(
                     newEpisode(epLink) {
                         this.name = epTitle
