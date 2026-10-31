@@ -7,7 +7,7 @@ import java.net.URLEncoder
 
 class WatchOMoviesIndianProvider : MainAPI() {
     override var mainUrl              = "https://watchomovies.study"
-    override var name                 = "WatchOMovies Indian"
+    override var name                 = "WatchOMoviesIndian"
     override val hasMainPage          = true
     override var lang                 = "hi"
     override val hasDownloadSupport   = true
@@ -18,7 +18,7 @@ class WatchOMoviesIndianProvider : MainAPI() {
     override val mainPage = mainPageOf(
         "" to "Latest Updates",
         "movies" to "Movies",
-        // Verified Indian Web Series / Hot Series Directors
+        "web-series" to "Web Series",
         "director/ullu-originals" to "Ullu Originals",
         "director/fliz-movies" to "Fliz Movies",
         "director/nuefliks" to "Nuefliks",
@@ -64,7 +64,8 @@ class WatchOMoviesIndianProvider : MainAPI() {
         }
         
         val document = app.get(url).document
-        val home = document.select("article, div.item, div.post, div.flix-item, .result-item").mapNotNull { it.toSearchResult() }
+        // Updated selectors to match WordPress/PlayPlay theme layout correctly
+        val home = document.select("div.item, article, div.post, div.flix-item, .result-item, .animation-2").mapNotNull { it.toSearchResult() }
         
         return newHomePageResponse(
             list = HomePageList(
@@ -111,14 +112,14 @@ class WatchOMoviesIndianProvider : MainAPI() {
         val encoded = URLEncoder.encode(query.trim(), "UTF-8")
         val url = "$mainUrl/?s=$encoded"
         val document = app.get(url).document
-        return document.select("article, div.item, div.post, .result-item").mapNotNull { it.toSearchResult() }.distinctBy { it.url }
+        return document.select("div.item, article, div.post, .result-item, .animation-2").mapNotNull { it.toSearchResult() }.distinctBy { it.url }
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
         val encoded = URLEncoder.encode(query.trim(), "UTF-8")
         val url = "$mainUrl/page/$page/?s=$encoded"
         val document = app.get(url).document
-        val results = document.select("article, div.item, div.post, .result-item").mapNotNull { it.toSearchResult() }.distinctBy { it.url }
+        val results = document.select("div.item, article, div.post, .result-item, .animation-2").mapNotNull { it.toSearchResult() }.distinctBy { it.url }
         return newSearchResponseList(results, results.isNotEmpty())
     }
 
@@ -131,29 +132,30 @@ class WatchOMoviesIndianProvider : MainAPI() {
             
         val poster = fixUrlNull(
             document.selectFirst("meta[property=og:image]")?.attr("content")
-                ?: document.selectFirst(".poster img, .dt_poster img")?.attr("src")
+                ?: document.selectFirst(".poster img, .dt_poster img, .entry-content img")?.attr("src")
         )
         
         val description = document.selectFirst("meta[property=og:description]")?.attr("content")?.trim()
-            ?: document.selectFirst(".wp-content p, .entry-content p")?.text()?.trim()
+            ?: document.selectFirst(".wp-content p, .entry-content p, .sbox p")?.text()?.trim()
 
-        val tags = document.select(".tags a, .genres a, a[href*='/tag/'], a[href*='/genre/'], a[href*='/director/']")
+        // Improved selector for extracting tags, genres, and category links accurately
+        val tags = document.select(".sgeneros a, .tags a, .genres a, a[href*='/tag/'], a[href*='/genre/'], a[href*='/director/'], .elementor-tag a")
             .map { it.text().trim() }
             .filter { it.isNotBlank() }
             .distinct()
 
-        val recommendations = document.select("article, div.item, .related-posts article")
+        val recommendations = document.select("div.item, article, .related-posts article, .animation-2")
             .mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
             .filter { it.url != url }
 
-        val isSeries = url.contains("series") || document.select(".episodios, .seasons").isNotEmpty()
+        val isSeries = url.contains("series") || document.select(".episodios, .seasons, .les-content").isNotEmpty()
 
         return if (isSeries) {
             val episodes = mutableListOf<Episode>()
-            document.select(".episodios li, .les-content a").forEachIndexed { index, ep ->
+            document.select(".episodios li, .les-content a, .seasons-list li a").forEachIndexed { index, ep ->
                 val epLink = fixUrlNull(ep.attr("href")) ?: url
-                val epTitle = ep.select(".episodiotitle, .servername").text().ifBlank { "Episode ${index + 1}" }
+                val epTitle = ep.select(".episodiotitle, .servername").text().ifBlank { ep.text() }.ifBlank { "Episode ${index + 1}" }
                 
                 episodes.add(
                     newEpisode(epLink) {
@@ -201,7 +203,7 @@ class WatchOMoviesIndianProvider : MainAPI() {
             }
         }
 
-        document.select("a.download, .links_table a, .button.flix, .dooplay_player_option").forEach { element ->
+        document.select("a.download, .links_table a, .button.flix, .dooplay_player_option, .elemento-button").forEach { element ->
             val href = element.attr("href").ifBlank { element.attr("data-url") }
             if (href.isNotBlank() && !href.startsWith("javascript") && !href.contains("#")) {
                 loadExtractor(fixUrl(href), data, subtitleCallback, callback)
