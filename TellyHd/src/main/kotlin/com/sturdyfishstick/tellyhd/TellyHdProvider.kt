@@ -19,44 +19,34 @@ import java.time.Year
 class TellyHd : MainAPI() {
 
     override var mainUrl: String = runBlocking {
-        TellyHdProvider.getDomains()?.Tellyhd ?: "https://tellyhd.media"
+        TellyHdProvider.getDomains()?.Tellyhd ?: "https://tellyhd.st"
     }
     override var name = "TellyHD"
-    override val hasMainPage = true
-    override var lang = "hi"
-    override val supportedTypes = setOf(TvType.NSFW)
-    override val vpnStatus = VPNStatus.MightBeNeeded
-    val directUrl = ""
-
+    override val hasMainPage= true
+    override var lang= "hi"
+    override val supportedTypes= setOf(TvType.NSFW)
+    override val vpnStatus= VPNStatus.MightBeNeeded
+    val directUrl =""
     @SuppressLint("NewApi")
     override val mainPage = mainPageOf(
         "release/${Year.now().value}" to "Latest",
-        "genre/18plus" to "18+",
-        "genre/9redmovie" to "9redmovie",
-        "genre/aahasflix" to "AahaFlix",
-        "genre/addatv" to "Addatv",
-        "genre/altbalaji" to "Alt Balaji",
-        "genre/atrangii" to "Atrangii",
-        "genre/bindastimes" to "Bindastimes",
-        "genre/brazzers" to "Brazzers",
-        "genre/cineprime" to "CinePrime",
-        "genre/digital-playground" to "Digital Playground",
-        "genre/english" to "English",
-        "genre/france" to "France",
-        "genre/goddesmahi" to "GoddesMahi",
-        "genre/hindi" to "Hindi",
+        "genre/usa" to "USA",
         "genre/jav" to "JAV",
-        "genre/marcdorcel" to "Marc Dorcel",
-        "genre/movies" to "Movies",
-        "genre/neonx" to "NeonX",
-        "genre/niksindian" to "Niksindian",
+        "genre/bindastimes" to "Bindastimes",
+        "genre/hunters" to "Hunters",
+        "genre/neonx" to "Neonx",
+        "genre/philippine" to "Philippine",
+        "genre/primeplay" to "Primeplay",
+        "genre/primeshots" to "Primeshots",
+        "genre/rabbit" to "Rabbit",
+        "genre/vivamax" to "Vivamax",
     )
 
     override suspend fun getMainPage(
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
-        val url = if (page == 1) "$mainUrl/${request.data}/" else "$mainUrl/${request.data}/page/$page/"
+        val url = if(page == 1) "$mainUrl/${request.data}/" else "$mainUrl/${request.data}/page/$page/"
         val document = app.get(url).document
         val home =
             document.select("div.items.normal article, div#archive-content article, div.items.full article").mapNotNull {
@@ -99,6 +89,7 @@ class TellyHd : MainAPI() {
             this.posterUrl = posterUrl
             this.quality = quality
         }
+
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
@@ -121,7 +112,7 @@ class TellyHd : MainAPI() {
             document.selectFirst("div.data > h1")?.text()?.trim().toString()
         var posterUrl = fixUrlNull(document.selectFirst("meta[property=og:image]")?.attr("content"))
         if (posterUrl.isNullOrEmpty()) {
-            posterUrl = fixUrlNull(document.select("div.poster img").attr("src"))
+                posterUrl = fixUrlNull(document.select("div.poster img").attr("src"))
         }
         val description = document.select("div.wp-content > p").text().trim()
         val episodes = document
@@ -139,10 +130,11 @@ class TellyHd : MainAPI() {
             }
 
         return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
-            this.posterUrl = posterUrl
-            this.plot = description
+                this.posterUrl = posterUrl
+                this.plot = description
+            }
         }
-    }
+
 
     override suspend fun loadLinks(
         data: String,
@@ -150,21 +142,20 @@ class TellyHd : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val loadData = tryParseJson<LinkData>(data)
-        val iframe = app.post(
-            url = "$mainUrl/wp-admin/admin-ajax.php", data = mapOf(
-                "action" to "doo_player_ajax", "post" to "${loadData?.post}", "nume" to "${loadData?.nume}", "type" to "${loadData?.type}"
-            ), referer = data, headers = mapOf("Accept" to "*/*", "X-Requested-With" to "XMLHttpRequest"
+           val loadData = tryParseJson<LinkData>(data)
+           val iframe= app.post(
+           url = "$mainUrl/wp-admin/admin-ajax.php", data = mapOf(
+                  "action" to "doo_player_ajax", "post" to "${loadData?.post}", "nume" to "${loadData?.nume}", "type" to "${loadData?.type}"
+               ), referer = data, headers = mapOf("Accept" to "*/*", "X-Requested-With" to "XMLHttpRequest"
+               )).parsed<ResponseHash>().embedUrl.getIframe()
+            if (!data.contains("youtube")) loadExtractor(
+                iframe,
+                "$directUrl/",
+                subtitleCallback,
+                callback
             )
-        ).parsed<ResponseHash>().embedUrl.getIframe()
-        if (!data.contains("youtube")) loadExtractor(
-            iframe,
-            "$directUrl/",
-            subtitleCallback,
-            callback
-        )
         return true
-    }
+        }
 
     private fun Element.getImageAttr(): String {
         return when {
@@ -184,7 +175,6 @@ class TellyHd : MainAPI() {
         val post: String? = null,
         val nume: String? = null,
     )
-
     data class ResponseHash(
         @JsonProperty("embed_url")
         val embedUrl: String,
