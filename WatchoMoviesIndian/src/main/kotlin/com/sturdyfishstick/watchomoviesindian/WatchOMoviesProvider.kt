@@ -7,7 +7,7 @@ import java.net.URLEncoder
 
 class WatchOMoviesIndianProvider : MainAPI() {
     override var mainUrl              = "https://watchomovies.study"
-    override var name                 = "WatchOMoviesIndian"
+    override var name                 = "WatchOMovies Indian"
     override val hasMainPage          = true
     override var lang                 = "hi"
     override val hasDownloadSupport   = true
@@ -15,11 +15,11 @@ class WatchOMoviesIndianProvider : MainAPI() {
     override val supportedTypes       = setOf(TvType.Movie, TvType.TvSeries, TvType.NSFW)
     override val vpnStatus            = VPNStatus.MightBeNeeded
 
-    // Sirf working categories rakhi hain taaki "No items" error na aaye
     override val mainPage = mainPageOf(
         "" to "Latest Updates",
         "movies" to "Movies",
-        "genre/ullu-originals" to "Ullu Originals",
+        // Verified Indian Web Series / Hot Series Directors
+        "director/ullu-originals" to "Ullu Originals",
         "director/fliz-movies" to "Fliz Movies",
         "director/nuefliks" to "Nuefliks",
         "director/hotshots" to "Hotshots",
