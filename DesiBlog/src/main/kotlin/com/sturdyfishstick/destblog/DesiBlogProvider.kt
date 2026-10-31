@@ -17,6 +17,7 @@ class Desi49Provider : MainAPI() {
     override val mainPage = mainPageOf(
         "videos" to "Most Recent",
         "videos/filter/views/all/1" to "Most Viewed",
+        "categories" to "All Categories",
         "category/amateur" to "Amateur",
         "category/viral-mms" to "Viral MMS",
         "category/big-tits" to "Big Tits",
@@ -35,7 +36,7 @@ class Desi49Provider : MainAPI() {
 
         val title = post.selectFirst("img")?.attr("alt")?.takeIf { it.isNotBlank() }
             ?: anchor.attr("title").takeIf { it.isNotBlank() }
-            ?: post.selectFirst("h2, h3, .title")?.text()?.takeIf { it.isNotBlank() }
+            ?: post.selectFirst("h2, h3, .title, .category-name, span")?.text()?.takeIf { it.isNotBlank() }
             ?: anchor.text()
 
         if (title.isBlank() || title.equals("Videos", ignoreCase = true)) return null
@@ -59,11 +60,12 @@ class Desi49Provider : MainAPI() {
         val url = when {
             request.data.isEmpty() && page == 1 -> "$mainUrl/"
             request.data.isEmpty() -> "$mainUrl/page/$page/"
+            request.data == "categories" -> "$mainUrl/categories/"
             page == 1 -> "$mainUrl/${request.data}/"
             else -> "$mainUrl/${request.data}/page/$page/"
         }
         val document = app.get(url).document
-        val home = document.select("article, .post, .item, div.flex.flex-col").mapNotNull { toResult(it) }.distinctBy { it.url }
+        val home = document.select("article, .post, .item, div.flex.flex-col, .category-item, .card").mapNotNull { toResult(it) }.distinctBy { it.url }
         val hasNext = document.select("link[rel=next]").isNotEmpty() && home.isNotEmpty()
         return newHomePageResponse(HomePageList(request.name, home, true), hasNext)
     }
@@ -82,7 +84,6 @@ class Desi49Provider : MainAPI() {
         val poster = fixUrlNull(doc.selectFirst("meta[property=og:image]")?.attr("content"))
         val description = doc.selectFirst("meta[property=og:description]")?.attr("content")?.trim()
         
-        // Improved iframe / video source extraction
         val streamLink = doc.selectFirst("iframe")?.attr("src")
             ?: doc.selectFirst("iframe[data-litespeed-src]")?.attr("data-litespeed-src")
             ?: doc.selectFirst("video source")?.attr("src")
