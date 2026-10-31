@@ -8,7 +8,7 @@ import com.lagradost.cloudstream3.plugins.Plugin
 @CloudstreamPlugin
 class TellyHDPlugin : Plugin() {
     override fun load(context: Context) {
-        registerMainAPI(TellyHD())
+        registerMainAPI(TellyHDPrpvider())
         registerExtractorAPI(Ds2play())
         registerExtractorAPI(DoodCom())
         registerExtractorAPI(DoodTo())
