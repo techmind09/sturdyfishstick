@@ -4,7 +4,7 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Element
 
-class Desi49Provider : MainAPI() {
+class Desi49Plugin : MainAPI() {
     override var mainUrl = "https://desi49.to"
     override var name = "Desi49"
     override val hasMainPage = true
