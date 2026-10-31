@@ -1,7 +1,6 @@
 package com.sturdyfishstick.tellyhd
 
 import android.annotation.SuppressLint
-import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
@@ -21,7 +20,6 @@ class TellyHD : MainAPI() {
     override val vpnStatus = VPNStatus.MightBeNeeded
     private val directUrl = ""
 
-    // Common headers to prevent timeout and blocking
     private val headers = mapOf(
         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
@@ -114,20 +112,31 @@ class TellyHD : MainAPI() {
             posterUrl = fixUrlNull(document.select("div.poster img").attr("src"))
         }
         val description = document.select("div.wp-content > p").text().trim()
-        val episodes = document.select("ul#playeroptionsul > li").mapNotNull { li ->
-            val name = li.selectFirst("span.title")?.text()
-            val type = li.attr("data-type")
-            val post = li.attr("data-post")
-            val nume = li.attr("data-nume")
-            if (name?.contains("trailer", ignoreCase = true) == true || name?.contains("dood", ignoreCase = true) == true) return@mapNotNull null
-            val json = LinkData(type, post, nume).toJson()
-            newEpisode(json) {
-                this.name = name
-            }
-        }
+        
+        // Broadened selector to catch all servers (Ultra Stream, Lulustream, DoodStream, etc.)
+        val episodes = document.select("ul#playeroptionsul > li, div.play-options li, .sources-box li, .dooplay_player_option, .options li")
+            .mapNotNull { element ->
+                val name = element.selectFirst("span.title")?.text()?.trim()
+                    ?: element.select("span").text().trim()
+                    ?: element.text().trim()
 
-        return if (url.contains("/movies/") || episodes.size <= 1) {
-            newMovieLoadResponse(title, url, TvType.Movie, episodes.firstOrNull()?.data ?: "") {
+                val type = element.attr("data-type").ifEmpty { element.attr("data-film") }.ifEmpty { "movie" }
+                val post = element.attr("data-post").ifEmpty { element.attr("data-id") }.ifEmpty { element.attr("data-movie") }
+                val nume = element.attr("data-nume").ifEmpty { element.attr("data-episode") }.ifEmpty { element.attr("data-seq") }.ifEmpty { "1" }
+
+                if (post.isNullOrEmpty() || nume.isNullOrEmpty()) return@mapNotNull null
+                if (name.contains("trailer", ignoreCase = true)) return@mapNotNull null
+
+                val json = LinkData(type, post, nume).toJson()
+                newEpisode(json) {
+                    this.name = name.ifEmpty { "Server" }
+                }
+            }.distinctBy { it.name }
+
+        val isMovie = url.contains("/movies/") || episodes.size <= 1
+
+        return if (isMovie && episodes.isNotEmpty()) {
+            newMovieLoadResponse(title, url, TvType.Movie, episodes.first().data) {
                 this.posterUrl = posterUrl
                 this.plot = description
             }
@@ -139,7 +148,7 @@ class TellyHD : MainAPI() {
         }
     }
 
-        override suspend fun loadLinks(
+    override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
@@ -161,7 +170,6 @@ class TellyHD : MainAPI() {
             )
         ).text
 
-        // Regex-based direct extraction to avoid any Jackson deserialization crash
         val iframeUrl = Regex(""""embed_url"\s*:\s*"([^"]+)"""").find(res)?.groupValues?.get(1)?.replace("\\/", "/")?.getIframe() 
             ?: Regex("src=['\"]([^'\"]+)['\"]").find(res)?.groupValues?.get(1) 
             ?: return false
@@ -178,6 +186,15 @@ class TellyHD : MainAPI() {
         return true
     }
 
+    private fun Element.getImageAttr(): String {
+        return when {
+            this.hasAttr("data-src") -> this.attr("abs:data-src")
+            this.hasAttr("data-lazy-src") -> this.attr("abs:data-lazy-src")
+            this.hasAttr("srcset") -> this.attr("abs:srcset").substringBefore(" ")
+            else -> this.attr("abs:src")
+        }
+    }
+
     private fun String.getIframe(): String {
         return Jsoup.parse(this).select("iframe").attr("src").ifEmpty { this }
     }
@@ -187,3 +204,4 @@ class TellyHD : MainAPI() {
         val post: String? = null,
         val nume: String? = null,
     )
+}
