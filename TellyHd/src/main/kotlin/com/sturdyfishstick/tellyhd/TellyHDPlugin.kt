@@ -1,15 +1,14 @@
-package com.sturdyfishstick
+package com.sturdyfishstick.tellyhd
 
 import android.content.Context
 import com.fasterxml.jackson.annotation.JsonProperty
-import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
 
 @CloudstreamPlugin
 class TellyHDPlugin : Plugin() {
     override fun load(context: Context) {
-        registerMainAPI(TellyHDProvider())
+        registerMainAPI(TellyHD())
         registerExtractorAPI(Ds2play())
         registerExtractorAPI(Vidsp())
         registerExtractorAPI(VidHideplus())
@@ -23,19 +22,9 @@ class TellyHDPlugin : Plugin() {
     }
 
     companion object {
-        private const val DOMAINS_URL =
-            "https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/domains.json"
-        var cachedDomains: Domains? = null
+        var cachedDomains: Domains = Domains("https://tellyhd.st")
 
-        suspend fun getDomains(forceRefresh: Boolean = false): Domains? {
-            if (cachedDomains == null || forceRefresh) {
-                try {
-                    cachedDomains = app.get(DOMAINS_URL).parsedSafe<Domains>()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    return null
-                }
-            }
+        suspend fun getDomains(forceRefresh: Boolean = false): Domains {
             return cachedDomains
         }
 
