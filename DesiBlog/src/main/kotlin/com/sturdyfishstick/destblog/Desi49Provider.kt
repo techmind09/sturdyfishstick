@@ -1,5 +1,6 @@
-package com.sturdyfishstick.desiblog
+package com.sturdyfishstick.destblog
 
+import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 
 class Desi49Provider : MainAPI() {
@@ -58,7 +59,6 @@ class Desi49Provider : MainAPI() {
     override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
         val doc = app.get(data).document
         
-        // Extract video source from <video> or <source> tags
         doc.select("video source, video").forEach { element ->
             val videoUrl = element.attr("src").ifEmpty { element.attr("data-src") }
             if (videoUrl.isNotEmpty()) {
@@ -75,7 +75,6 @@ class Desi49Provider : MainAPI() {
             }
         }
         
-        // Regex fallback to catch direct .mp4 CDN links embedded in page scripts or HTML
         val html = doc.html()
         val regex = Regex("https://[^\"]+\\.mp4")
         regex.findAll(html).forEach { match ->
