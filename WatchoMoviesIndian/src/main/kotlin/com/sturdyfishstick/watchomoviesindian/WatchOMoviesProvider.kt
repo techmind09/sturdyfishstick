@@ -15,6 +15,12 @@ class WatchOMoviesIndianProvider : MainAPI() {
     override val supportedTypes       = setOf(TvType.Movie, TvType.TvSeries, TvType.NSFW)
     override val vpnStatus            = VPNStatus.MightBeNeeded
 
+    private val headers = mapOf(
+        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language" to "en-US,en;q=0.5"
+    )
+
     override val mainPage = mainPageOf(
         "" to "Latest Updates",
         "movies" to "Movies",
@@ -63,8 +69,7 @@ class WatchOMoviesIndianProvider : MainAPI() {
             else -> "$mainUrl/${request.data}/page/$page/"
         }
         
-        val document = app.get(url).document
-        // Updated selectors to match WordPress/PlayPlay theme layout correctly
+        val document = app.get(url, headers = headers).document
         val home = document.select("div.item, article, div.post, div.flix-item, .result-item, .animation-2").mapNotNull { it.toSearchResult() }
         
         return newHomePageResponse(
@@ -111,20 +116,20 @@ class WatchOMoviesIndianProvider : MainAPI() {
     override suspend fun search(query: String): List<SearchResponse> {
         val encoded = URLEncoder.encode(query.trim(), "UTF-8")
         val url = "$mainUrl/?s=$encoded"
-        val document = app.get(url).document
+        val document = app.get(url, headers = headers).document
         return document.select("div.item, article, div.post, .result-item, .animation-2").mapNotNull { it.toSearchResult() }.distinctBy { it.url }
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
         val encoded = URLEncoder.encode(query.trim(), "UTF-8")
         val url = "$mainUrl/page/$page/?s=$encoded"
-        val document = app.get(url).document
+        val document = app.get(url, headers = headers).document
         val results = document.select("div.item, article, div.post, .result-item, .animation-2").mapNotNull { it.toSearchResult() }.distinctBy { it.url }
         return newSearchResponseList(results, results.isNotEmpty())
     }
 
     override suspend fun load(url: String): LoadResponse {
-        val document = app.get(url).document
+        val document = app.get(url, headers = headers).document
 
         val title = document.selectFirst("meta[property=og:title]")?.attr("content")?.trim()
             ?: document.selectFirst("h1")?.text()?.trim()
@@ -138,7 +143,6 @@ class WatchOMoviesIndianProvider : MainAPI() {
         val description = document.selectFirst("meta[property=og:description]")?.attr("content")?.trim()
             ?: document.selectFirst(".wp-content p, .entry-content p, .sbox p")?.text()?.trim()
 
-        // Improved selector for extracting tags, genres, and category links accurately
         val tags = document.select(".sgeneros a, .tags a, .genres a, a[href*='/tag/'], a[href*='/genre/'], a[href*='/director/'], .elementor-tag a")
             .map { it.text().trim() }
             .filter { it.isNotBlank() }
@@ -193,7 +197,7 @@ class WatchOMoviesIndianProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val document = app.get(data).document
+        val document = app.get(data, headers = headers).document
         
         document.select("iframe, source, video").forEach { element ->
             val src = element.attr("src").ifBlank { element.attr("data-src") }
