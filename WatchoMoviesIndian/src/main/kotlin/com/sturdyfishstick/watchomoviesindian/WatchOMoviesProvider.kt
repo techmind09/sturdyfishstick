@@ -70,7 +70,7 @@ class WatchOMoviesIndianProvider : MainAPI() {
         }
         
         val document = app.get(url, headers = headers).document
-        val home = document.select("div.item, article, div.post, div.flix-item, .result-item, .animation-2").mapNotNull { it.toSearchResult() }
+        val home = document.select("article, div.item, div.post, div.flix-item, .result-item, .animation-2, div.box").mapNotNull { it.toSearchResult() }
         
         return newHomePageResponse(
             list = HomePageList(
@@ -83,20 +83,24 @@ class WatchOMoviesIndianProvider : MainAPI() {
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val linkElem = this.selectFirst("a") ?: return null
+        val linkElem = this.selectFirst("a[href]") ?: return null
         val href = fixUrlNull(linkElem.attr("href")) ?: return null
-        val titleText = this.selectFirst(".title, h2, h3, h4, .name")?.text()
+        if (href.isBlank() || href == mainUrl) return null
+
+        val titleText = this.selectFirst(".title, h2, h3, h4, .name, .text")?.text()
             ?: linkElem.attr("title").takeIf { it.isNotBlank() }
             ?: linkElem.text()
             
         if (titleText.isBlank()) return null
         val title = fixTitle(titleText).trim()
 
+        // Improved poster selection for lazy loading and data attributes
         val img = this.selectFirst("img")
         val posterUrl = fixUrlNull(
-            img?.attr("data-src")?.takeIf { it.isNotBlank() }
+            img?.attr("data-src")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
                 ?: img?.attr("data-lazy-src")?.takeIf { it.isNotBlank() }
-                ?: img?.attr("src")?.takeIf { it.isNotBlank() }
+                ?: img?.attr("src")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
+                ?: this.selectFirst(".poster img, .image img")?.attr("src")
         )
 
         val isSeries = href.contains("series") || title.contains("Season", true) || title.contains("Episode", true)
@@ -117,14 +121,14 @@ class WatchOMoviesIndianProvider : MainAPI() {
         val encoded = URLEncoder.encode(query.trim(), "UTF-8")
         val url = "$mainUrl/?s=$encoded"
         val document = app.get(url, headers = headers).document
-        return document.select("div.item, article, div.post, .result-item, .animation-2").mapNotNull { it.toSearchResult() }.distinctBy { it.url }
+        return document.select("article, div.item, div.post, .result-item, .animation-2, div.box").mapNotNull { it.toSearchResult() }.distinctBy { it.url }
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
         val encoded = URLEncoder.encode(query.trim(), "UTF-8")
         val url = "$mainUrl/page/$page/?s=$encoded"
         val document = app.get(url, headers = headers).document
-        val results = document.select("div.item, article, div.post, .result-item, .animation-2").mapNotNull { it.toSearchResult() }.distinctBy { it.url }
+        val results = document.select("article, div.item, div.post, .result-item, .animation-2, div.box").mapNotNull { it.toSearchResult() }.distinctBy { it.url }
         return newSearchResponseList(results, results.isNotEmpty())
     }
 
@@ -137,18 +141,18 @@ class WatchOMoviesIndianProvider : MainAPI() {
             
         val poster = fixUrlNull(
             document.selectFirst("meta[property=og:image]")?.attr("content")
-                ?: document.selectFirst(".poster img, .dt_poster img, .entry-content img")?.attr("src")
+                ?: document.selectFirst(".poster img, .dt_poster img, .entry-content img, .wp-post-image")?.attr("src")
         )
         
         val description = document.selectFirst("meta[property=og:description]")?.attr("content")?.trim()
             ?: document.selectFirst(".wp-content p, .entry-content p, .sbox p")?.text()?.trim()
 
-        val tags = document.select(".sgeneros a, .tags a, .genres a, a[href*='/tag/'], a[href*='/genre/'], a[href*='/director/'], .elementor-tag a")
+        val tags = document.select(".sgeneros a, .tags a, .genres a, a[href*='/tag/'], a[href*='/genre/'], a[href*='/director/']")
             .map { it.text().trim() }
             .filter { it.isNotBlank() }
             .distinct()
 
-        val recommendations = document.select("div.item, article, .related-posts article, .animation-2")
+        val recommendations = document.select("article, div.item, .related-posts article, .animation-2")
             .mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
             .filter { it.url != url }
