@@ -29,11 +29,19 @@ class Desi49Provider : MainAPI() {
     )
 
     private fun toResult(post: Element): SearchResponse? {
-        val anchor = post.selectFirst("a") ?: return null
-        val url = anchor.attr("href").takeIf { it.isNotBlank() } ?: return null
-        val title = anchor.attr("title").takeIf { it.isNotBlank() } ?: anchor.text()
-        if (title.isBlank()) return null
+        val anchor = post.selectFirst("a[href]") ?: post.selectFirst("a") ?: return null
+        val url = fixUrl(anchor.attr("href"))
+        if (url.isBlank() || url.contains("/page/") || url == mainUrl) return null
+
+        // Try getting title from image alt, title attribute, or anchor text
         val img = post.selectFirst("img")
+        val title = img?.attr("alt")?.takeIf { it.isNotBlank() }
+            ?: anchor.attr("title").takeIf { it.isNotBlank() }
+            ?: post.selectFirst("h2, h3, .title")?.text()?.takeIf { it.isNotBlank() }
+            ?: anchor.text()
+
+        if (title.isBlank() || title.equals("Videos", ignoreCase = true)) return null
+
         val imageUrl = img?.attr("data-src")?.takeIf { it.isNotBlank() }
             ?: img?.attr("src")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
 
@@ -50,8 +58,8 @@ class Desi49Provider : MainAPI() {
             else -> "$mainUrl/${request.data}/page/$page/"
         }
         val document = app.get(url).document
-        // Updated selector to accurately match video items and grid cards
-        val home = document.select("div.grid div, article, div.video-item, div.group").mapNotNull { toResult(it) }.distinctBy { it.url }
+        // Target article items or post cards specifically
+        val home = document.select("article, .post, .item, div.flex.flex-col").mapNotNull { toResult(it) }.distinctBy { it.url }
         val hasNext = document.select("link[rel=next]").isNotEmpty() && home.isNotEmpty()
         return newHomePageResponse(HomePageList(request.name, home, true), hasNext)
     }
@@ -59,13 +67,14 @@ class Desi49Provider : MainAPI() {
     override suspend fun search(query: String, page: Int): SearchResponseList? {
         val document = app.get("$mainUrl/page/$page/?s=$query").document
         val searchResult: List<SearchResponse> =
-            document.select("div.grid div, article, div.video-item, div.group").mapNotNull { toResult(it) }.distinctBy { it.url }
+            document.select("article, .post, .item, div.flex.flex-col").mapNotNull { toResult(it) }.distinctBy { it.url }
         return searchResult.toNewSearchResponseList()
     }
 
     override suspend fun load(url: String): LoadResponse? {
         val doc = app.get(url).document
-        val title = doc.selectFirst("meta[property=og:title]")?.attr("content")?.trim().toString()
+        val title = doc.selectFirst("meta[property=og:title]")?.attr("content")?.trim()
+            ?: doc.selectFirst("h1")?.text()?.trim().toString()
         val poster = fixUrlNull(doc.selectFirst("meta[property=og:image]")?.attr("content"))
         val description = doc.selectFirst("meta[property=og:description]")?.attr("content")?.trim()
         val streamLink = doc.selectFirst("iframe[data-litespeed-src]")?.attr("data-litespeed-src")
