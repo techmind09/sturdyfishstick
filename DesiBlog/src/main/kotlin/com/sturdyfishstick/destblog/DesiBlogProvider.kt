@@ -33,17 +33,22 @@ class Desi49Provider : MainAPI() {
         val url = fixUrl(anchor.attr("href"))
         if (url.isBlank() || url.contains("/page/") || url == mainUrl) return null
 
-        // Try getting title from image alt, title attribute, or anchor text
-        val img = post.selectFirst("img")
-        val title = img?.attr("alt")?.takeIf { it.isNotBlank() }
+        val title = post.selectFirst("img")?.attr("alt")?.takeIf { it.isNotBlank() }
             ?: anchor.attr("title").takeIf { it.isNotBlank() }
             ?: post.selectFirst("h2, h3, .title")?.text()?.takeIf { it.isNotBlank() }
             ?: anchor.text()
 
         if (title.isBlank() || title.equals("Videos", ignoreCase = true)) return null
 
-        val imageUrl = img?.attr("data-src")?.takeIf { it.isNotBlank() }
-            ?: img?.attr("src")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
+        // Fix image selection to avoid grabbing site logos/avatars
+        val imgElement = post.select("img").firstOrNull { img ->
+            val src = img.attr("src") + img.attr("data-src") + img.attr("data-lazy-src")
+            !src.contains("logo") && !src.contains("avatar") && !src.contains("user")
+        } ?: post.selectFirst("img")
+
+        val imageUrl = imgElement?.attr("data-src")?.takeIf { it.isNotBlank() }
+            ?: imgElement?.attr("data-lazy-src")?.takeIf { it.isNotBlank() }
+            ?: imgElement?.attr("src")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
 
         return newMovieSearchResponse(fixTitle(title), url, TvType.NSFW) {
             this.posterUrl = fixUrlNull(imageUrl)
@@ -58,7 +63,6 @@ class Desi49Provider : MainAPI() {
             else -> "$mainUrl/${request.data}/page/$page/"
         }
         val document = app.get(url).document
-        // Target article items or post cards specifically
         val home = document.select("article, .post, .item, div.flex.flex-col").mapNotNull { toResult(it) }.distinctBy { it.url }
         val hasNext = document.select("link[rel=next]").isNotEmpty() && home.isNotEmpty()
         return newHomePageResponse(HomePageList(request.name, home, true), hasNext)
@@ -77,49 +81,16 @@ class Desi49Provider : MainAPI() {
             ?: doc.selectFirst("h1")?.text()?.trim().toString()
         val poster = fixUrlNull(doc.selectFirst("meta[property=og:image]")?.attr("content"))
         val description = doc.selectFirst("meta[property=og:description]")?.attr("content")?.trim()
-        val streamLink = doc.selectFirst("iframe[data-litespeed-src]")?.attr("data-litespeed-src")
-            ?: doc.selectFirst("iframe[src]")?.attr("src") ?: ""
+        
+        // Improved iframe / video source extraction
+        val streamLink = doc.selectFirst("iframe")?.attr("src")
+            ?: doc.selectFirst("iframe[data-litespeed-src]")?.attr("data-litespeed-src")
+            ?: doc.selectFirst("video source")?.attr("src")
+            ?: url
 
-        return newMovieLoadResponse(title, url, TvType.NSFW, streamLink.ifEmpty { url }) {
+        return newMovieLoadResponse(title, url, TvType.NSFW, fixUrl(streamLink)) {
             this.posterUrl = poster
             this.plot = description
-        }
-    }
-
-    data class StreamResponse(val streaming_url: String?)
-
-    private suspend fun extractVidhost(
-        embedUrl: String,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        return try {
-            val host = embedUrl.substringAfter("//").substringBefore("/")
-            val filecode = embedUrl.trimEnd('/').substringAfterLast('/')
-            
-            val response = app.post(
-                "https://$host/api/stream",
-                json = mapOf(
-                    "filecode" to filecode,
-                    "device" to "web",
-                    "codecs" to emptyList<String>()
-                ),
-                referer = embedUrl
-            ).parsedSafe<StreamResponse>()
-
-            val stream = response?.streaming_url
-            if (stream.isNullOrEmpty()) return false
-
-            callback.invoke(
-                newExtractorLink(name, name, stream) {
-                    this.referer = embedUrl
-                    this.quality = Qualities.Unknown.value
-                    this.type = ExtractorLinkType.M3U8
-                }
-            )
-            true
-        } catch (e: Exception) {
-            false
         }
     }
 
@@ -130,12 +101,6 @@ class Desi49Provider : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         if (data.isEmpty()) return false
-
-        val host = data.substringAfter("//").substringBefore("/")
-        if (host.contains("vidhost")) {
-            if (extractVidhost(data, subtitleCallback, callback)) return true
-        }
-
-        return loadExtractor(data, referer = data, subtitleCallback, callback)
+        return loadExtractor(data, referer = mainUrl, subtitleCallback, callback)
     }
 }
