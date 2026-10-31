@@ -1,4 +1,4 @@
-package com.sturdyfishstick.tellyhd
+package com.sturdyfishstick
 
 import android.content.Context
 import com.fasterxml.jackson.annotation.JsonProperty
@@ -9,7 +9,7 @@ import com.lagradost.cloudstream3.plugins.Plugin
 @CloudstreamPlugin
 class TellyHDPlugin : Plugin() {
     override fun load(context: Context) {
-        registerMainAPI(TellyHD())
+        registerMainAPI(TellyHDProvider())
         registerExtractorAPI(Ds2play())
         registerExtractorAPI(Vidsp())
         registerExtractorAPI(VidHideplus())
