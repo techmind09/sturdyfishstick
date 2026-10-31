@@ -1,4 +1,4 @@
-package com.sturdyfishstick
+package com.sturdyfishstick.tellyhd
 
 import android.annotation.SuppressLint
 import com.fasterxml.jackson.annotation.JsonProperty
@@ -11,7 +11,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.time.Year
 
-class TellyHDProvider : MainAPI() {
+class TellyHD : MainAPI() {
 
     override var mainUrl: String = "https://tellyhd.st"
     override var name = "TellyHD"
@@ -30,23 +30,25 @@ class TellyHDProvider : MainAPI() {
     @SuppressLint("NewApi")
     override val mainPage = mainPageOf(
         "release/${Year.now().value}" to "Latest",
-        "genre/5kporn" to "5KPorn",
-        "genre/11upmovies" to "11UpMovies",
         "genre/18plus" to "18+",
         "genre/9redmovie" to "9redmovie",
-        "genre/aahasflix" to "AahaFlix",
         "genre/addatv" to "Addatv",
+        "genre/aahasflix" to "AahaFlix",
         "genre/altbalaji" to "Alt Balaji",
-        "genre/usa" to "USA",
+        "genre/atrangii" to "Atrangii",
         "genre/jav" to "JAV",
         "genre/bindastimes" to "Bindastimes",
-        "genre/hunters" to "Hunters",
-        "genre/neonx" to "Neonx",
-        "genre/philippine" to "Philippine",
-        "genre/primeplay" to "Primeplay",
-        "genre/primeshots" to "Primeshots",
-        "genre/rabbit" to "Rabbit",
-        "genre/vivamax" to "Vivamax",
+        "genre/brazzers" to "Brazzers",
+        "genre/cineprime" to "CinePrime",
+        "genre/digital-playground" to "Digital Playground",
+        "genre/english" to "English",
+        "genre/france" to "France",
+        "genre/goddesmahi" to "GoddesMahi",
+        "genre/hindi" to "Hindi",
+        "genre/marcdorcel" to "Marc Dorcel",
+        "genre/movies" to "Movies",
+        "genre/neonx" to "NeonX",
+        "genre/niksindian" to "Niksindian",
     )
 
     override suspend fun getMainPage(
@@ -124,9 +126,16 @@ class TellyHDProvider : MainAPI() {
             }
         }
 
-        return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
-            this.posterUrl = posterUrl
-            this.plot = description
+        return if (url.contains("/movies/") || episodes.size <= 1) {
+            newMovieLoadResponse(title, url, TvType.Movie, episodes.firstOrNull()?.data ?: "") {
+                this.posterUrl = posterUrl
+                this.plot = description
+            }
+        } else {
+            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+                this.posterUrl = posterUrl
+                this.plot = description
+            }
         }
     }
 
