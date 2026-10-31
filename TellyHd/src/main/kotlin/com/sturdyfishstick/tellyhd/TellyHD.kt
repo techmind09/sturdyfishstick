@@ -139,36 +139,47 @@ class TellyHD : MainAPI() {
         }
     }
 
-    override suspend fun loadLinks(
+        override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val loadData = tryParseJson<LinkData>(data)
-        val iframe = app.post(
-            url = "$mainUrl/wp-admin/admin-ajax.php", data = mapOf(
-                "action" to "doo_player_ajax", "post" to "${loadData?.post}", "nume" to "${loadData?.nume}", "type" to "${loadData?.type}"
-            ), referer = data, headers = headers
-        ).parsed<ResponseHash>().embedUrl.getIframe()
+        val loadData = tryParseJson<LinkData>(data) ?: return false
+        val res = app.post(
+            url = "$mainUrl/wp-admin/admin-ajax.php",
+            data = mapOf(
+                "action" to "doo_player_ajax",
+                "post" to "${loadData.post}",
+                "nume" to "${loadData.nume}",
+                "type" to "${loadData.type}"
+            ),
+            referer = data,
+            headers = mapOf(
+                "Accept" to "*/*",
+                "X-Requested-With" to "XMLHttpRequest"
+            )
+        ).text
 
-        if (!iframe.contains("youtube")) {
-            loadExtractor(iframe, "$directUrl/", subtitleCallback, callback)
+        // Regex-based direct extraction to avoid any Jackson deserialization crash
+        val iframeUrl = Regex(""""embed_url"\s*:\s*"([^"]+)"""").find(res)?.groupValues?.get(1)?.replace("\\/", "/")?.getIframe() 
+            ?: Regex("src=['\"]([^'\"]+)['\"]").find(res)?.groupValues?.get(1) 
+            ?: return false
+
+        val finalIframe = if (iframeUrl.startsWith("//")) "https:$iframeUrl" else iframeUrl
+
+        if (!finalIframe.contains("youtube")) {
+            if (finalIframe.contains("telly.xin")) {
+                TellyXin().getUrl(finalIframe, "$mainUrl/")?.forEach(callback)
+            } else {
+                loadExtractor(finalIframe, "$mainUrl/", subtitleCallback, callback)
+            }
         }
         return true
     }
 
-    private fun Element.getImageAttr(): String {
-        return when {
-            this.hasAttr("data-src") -> this.attr("abs:data-src")
-            this.hasAttr("data-lazy-src") -> this.attr("abs:data-lazy-src")
-            this.hasAttr("srcset") -> this.attr("abs:srcset").substringBefore(" ")
-            else -> this.attr("abs:src")
-        }
-    }
-
     private fun String.getIframe(): String {
-        return Jsoup.parse(this).select("iframe").attr("src")
+        return Jsoup.parse(this).select("iframe").attr("src").ifEmpty { this }
     }
 
     data class LinkData(
@@ -176,9 +187,3 @@ class TellyHD : MainAPI() {
         val post: String? = null,
         val nume: String? = null,
     )
-
-    data class ResponseHash(
-        @JsonProperty("embed_url") val embedUrl: String,
-        val type: String,
-    )
-}
