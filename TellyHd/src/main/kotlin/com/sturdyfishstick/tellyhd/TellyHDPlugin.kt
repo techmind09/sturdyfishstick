@@ -19,6 +19,7 @@ class TellyHDPlugin : Plugin() {
         registerExtractorAPI(Luluvid())
         registerExtractorAPI(Xtapes())
         registerExtractorAPI(Ultrastream())
+        registerExtractorAPI(TellyXin()) // Added TellyXin registration here
     }
 
     companion object {
