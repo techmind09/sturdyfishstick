@@ -39,10 +39,10 @@ class TellyHdPlugin: Plugin() {
             }
             return cachedDomains
         }
-    }
 
-    data class Domains(
-        @JsonProperty("tellyhd")
-        val Tellyhd: String,
-    )
+        data class Domains(
+            @JsonProperty("tellyhd")
+            val Tellyhd: String,
+        )
+    }
 }
