@@ -19,7 +19,7 @@ import java.time.Year
 class TellyHd : MainAPI() {
 
     override var mainUrl: String = runBlocking {
-        TollyProProvider.getDomains()?.Tellyhd ?: "https://tellyhd.media"
+        TellyHdProvider.getDomains()?.Tellyhd ?: "https://tellyhd.media"
     }
     override var name = "TellyHD"
     override val hasMainPage = true
@@ -33,8 +33,8 @@ class TellyHd : MainAPI() {
         "release/${Year.now().value}" to "Latest",
         "genre/18plus" to "18+",
         "genre/9redmovie" to "9redmovie",
-        "genre/addatv" to "Addatv",
         "genre/aahasflix" to "AahaFlix",
+        "genre/addatv" to "Addatv",
         "genre/altbalaji" to "Alt Balaji",
         "genre/atrangii" to "Atrangii",
         "genre/bindastimes" to "Bindastimes",
@@ -49,7 +49,7 @@ class TellyHd : MainAPI() {
         "genre/marcdorcel" to "Marc Dorcel",
         "genre/movies" to "Movies",
         "genre/neonx" to "NeonX",
-        "genre/niksindian" to "Niksindian"
+        "genre/niksindian" to "Niksindian",
     )
 
     override suspend fun getMainPage(
