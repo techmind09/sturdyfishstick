@@ -11,7 +11,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.time.Year
 
-class TellyHD : MainAPI() {
+class TellyHDProvider : MainAPI() {
 
     override var mainUrl: String = "https://tellyhd.st"
     override var name = "TellyHD"
