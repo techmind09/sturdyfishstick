@@ -17,6 +17,15 @@ class Desi49Provider : MainAPI() {
     override val mainPage = mainPageOf(
         "videos" to "Most Recent",
         "videos/filter/views/all/1" to "Most Viewed",
+        "category/amateur" to "Amateur",
+        "category/viral-mms" to "Viral MMS",
+        "category/big-tits" to "Big Tits",
+        "category/milf" to "MILF",
+        "category/blowjob" to "Blowjob",
+        "category/big-ass" to "Big Ass",
+        "category/bengali" to "Bengali",
+        "category/threesome" to "Threesome",
+        "category/anal" to "Anal"
     )
 
     private fun toResult(post: Element): SearchResponse? {
@@ -41,7 +50,8 @@ class Desi49Provider : MainAPI() {
             else -> "$mainUrl/${request.data}/page/$page/"
         }
         val document = app.get(url).document
-        val home = document.select("article.loop-video").mapNotNull { toResult(it) }
+        // Updated selector to accurately match video items and grid cards
+        val home = document.select("div.grid div, article, div.video-item, div.group").mapNotNull { toResult(it) }.distinctBy { it.url }
         val hasNext = document.select("link[rel=next]").isNotEmpty() && home.isNotEmpty()
         return newHomePageResponse(HomePageList(request.name, home, true), hasNext)
     }
@@ -49,7 +59,7 @@ class Desi49Provider : MainAPI() {
     override suspend fun search(query: String, page: Int): SearchResponseList? {
         val document = app.get("$mainUrl/page/$page/?s=$query").document
         val searchResult: List<SearchResponse> =
-            document.select("article.loop-video").mapNotNull { toResult(it) }
+            document.select("div.grid div, article, div.video-item, div.group").mapNotNull { toResult(it) }.distinctBy { it.url }
         return searchResult.toNewSearchResponseList()
     }
 
