@@ -133,4 +133,14 @@ open class Bigwarp : ExtractorApi() {
                 newExtractorLink(
                     source = name,
                     name = name,
-                    
+                    url = link,
+                    INFER_TYPE
+                ) {
+                    this.referer = referer ?: "$mainUrl/"
+                    this.quality = Qualities.P1080.value
+                }
+            )
+        }
+        return null
+    }
+}
