@@ -12,6 +12,7 @@ class Mmsvibex : MainAPI() {
 
     // Each row is a WordPress listing that pages with /page/N/. "" is the site root (latest videos).
     override val mainPage = mainPageOf(
+        "" to "Latest Videos",
         "category/indian/" to "Indian",
         "category/desi/" to "Desi",
         "category/arab/" to "Arab",
@@ -20,7 +21,8 @@ class Mmsvibex : MainAPI() {
         "category/pakistani/" to "Pakistani",
         "category/sri-lankan/" to "Sri Lankan",
         "category/uncategorized/" to "Uncategorized",
-        "category/other/" to "Other"
+        "category/other/" to "Other",
+        "photos/" to "Photos"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
