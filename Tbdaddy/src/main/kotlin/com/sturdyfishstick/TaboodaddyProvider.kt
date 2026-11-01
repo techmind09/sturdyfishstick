@@ -55,10 +55,7 @@ class TaboodaddyProvider : MainAPI() {
         "category/puretaboo" to "Pure Taboo"
         "category/realitykings" to "Realitykings"
         "category/taboo" to "Taboo"
-        "category/big-dick" to "Big Dick"
-        "category/big-dick" to "Big Dick"
-        "category/big-dick" to "Big Dick"
-    )
+        )
 
     private fun userAgent(): String = UA
 
