@@ -1,15 +1,13 @@
-package com.sturdyfishstick.desiblog
+package com.sturdyfishstick
 
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
 import android.content.Context
 
 @CloudstreamPlugin
-class DesiMaalPlugin : Plugin() {
+class MmsvibexPlugin : Plugin() {
     override fun load(context: Context) {
-        // Apne provider ko load karwao
-        registerMainAPI(DesiMaalProvider())
-        
-
+        // All providers should be added in this manner. Please don't edit the providers list directly.
+        registerMainAPI(Mmsvibex())
     }
 }
