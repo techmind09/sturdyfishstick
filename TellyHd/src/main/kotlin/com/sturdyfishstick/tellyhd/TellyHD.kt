@@ -113,7 +113,6 @@ class TellyHD : MainAPI() {
         }
         val description = document.select("div.wp-content > p").text().trim()
         
-        // Broadened selector to catch all servers (Ultra Stream, Lulustream, DoodStream, etc.)
         val episodes = document.select("ul#playeroptionsul > li, div.play-options li, .sources-box li, .dooplay_player_option, .options li")
             .mapNotNull { element ->
                 val name = element.selectFirst("span.title")?.text()?.trim()
@@ -156,7 +155,7 @@ class TellyHD : MainAPI() {
     ): Boolean {
         val loadData = tryParseJson<LinkData>(data) ?: return false
 
-        // Dooplayer AJAX request to get the embed HTML/JSON
+        // 1. First try: Dooplayer AJAX request
         val res = app.post(
             url = "$mainUrl/wp-admin/admin-ajax.php",
             data = mapOf(
@@ -173,20 +172,25 @@ class TellyHD : MainAPI() {
             )
         ).text
 
-        // Extract embed_url value safely from JSON response
-        val embedHtml = Regex(""""embed_url"\s*:\s*"([^"]+)"""").find(res)?.groupValues?.get(1)?.replace("\\/", "/") ?: res
+        var embedHtml = Regex(""""embed_url"\s*:\s*"([^"]+)"""").find(res)?.groupValues?.get(1)?.replace("\\/", "/") ?: res
 
-        // Extract the actual iframe src URL (e.g., https://telly.xin/play?v=...)
-        val iframeUrl = Regex("src=['\"]([^'\"]+)['\"]").find(embedHtml)?.groupValues?.get(1) 
+        var iframeUrl = Regex("src=['\"]([^'\"]+)['\"]").find(embedHtml)?.groupValues?.get(1) 
             ?: Jsoup.parse(embedHtml).select("iframe").attr("src")
             .ifEmpty { embedHtml }
+
+        // 2. Fallback: If AJAX response doesn't give a valid player URL, scrape the source page directly using post ID
+        if (iframeUrl.isEmpty() || iframeUrl.contains("about:blank") || iframeUrl == res) {
+            val doc = app.get("$mainUrl/?p=${loadData.post}", headers = headers).document
+            iframeUrl = doc.select("iframe").attr("src")
+                .ifEmpty { doc.select("source").attr("src") }
+        }
 
         val finalIframe = when {
             iframeUrl.startsWith("//") -> "https:$iframeUrl"
             else -> iframeUrl
         }.trim()
 
-        if (finalIframe.isEmpty() || finalIframe.contains("about:blank")) return false
+        if (finalIframe.isEmpty() || finalNolinksFound(finalIframe)) return false
 
         if (!finalIframe.contains("youtube", ignoreCase = true)) {
             if (finalIframe.contains("telly.xin", ignoreCase = true) || finalIframe.contains("ultrastream", ignoreCase = true)) {
@@ -196,6 +200,10 @@ class TellyHD : MainAPI() {
             }
         }
         return true
+    }
+
+    private fun finalNolinksFound(url: String): Boolean {
+        return url.contains("about:blank")
     }
 
     private fun Element.getImageAttr(): String {
