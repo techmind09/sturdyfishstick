@@ -1,4 +1,4 @@
-package com.sturdyfishstick
+package com.mmsvibex
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
@@ -41,12 +41,18 @@ class Mmsvibex : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val res = app.get(
+        val resText = app.get(
             "$mainUrl/wp-json/mmsvibe/v1/search-suggest",
             params = mapOf("q" to query)
-        ).parsedSafe<List>>() ?: return emptyList()
+        ).text
 
-        return res.mapNotNull { item ->
+        val items = try {
+            parseJson<List>>(resText)
+        } catch (e: Exception) {
+            emptyList()
+        }
+
+        return items.mapNotNull { item ->
             val title = item["title"] as? String ?: return@mapNotNull null
             val url = item["url"] as? String ?: return@mapNotNull null
             val poster = item["thumbnail"] as? String
