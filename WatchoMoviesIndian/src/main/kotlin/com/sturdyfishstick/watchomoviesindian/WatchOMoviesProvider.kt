@@ -220,8 +220,3 @@ class WatchOMoviesIndianProvider : MainAPI() {
         return true
     }
 }
-}
-
-        return true
-    }
-}
