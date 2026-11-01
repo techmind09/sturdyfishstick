@@ -69,8 +69,7 @@ class WatchOMoviesIndianProvider : MainAPI() {
             else -> "$mainUrl/${request.data}/page/$page/"
         }
         
-        // Added interceptor = Rahul/Cloudstream interceptor for Cloudflare handling
-        val document = app.get(url, headers = headers, interceptor = AppUtils.cloudflareInterceptor).document
+        val document = app.get(url, headers = headers).document
         val home = document.select("article, div.item, div.post, div.flix-item, .result-item, .animation-2, div.box").mapNotNull { it.toSearchResult() }
         
         return newHomePageResponse(
@@ -120,20 +119,20 @@ class WatchOMoviesIndianProvider : MainAPI() {
     override suspend fun search(query: String): List<SearchResponse> {
         val encoded = URLEncoder.encode(query.trim(), "UTF-8")
         val url = "$mainUrl/?s=$encoded"
-        val document = app.get(url, headers = headers, interceptor = AppUtils.cloudflareInterceptor).document
+        val document = app.get(url, headers = headers).document
         return document.select("article, div.item, div.post, .result-item, .animation-2, div.box").mapNotNull { it.toSearchResult() }.distinctBy { it.url }
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
         val encoded = URLEncoder.encode(query.trim(), "UTF-8")
         val url = "$mainUrl/page/$page/?s=$encoded"
-        val document = app.get(url, headers = headers, interceptor = AppUtils.cloudflareInterceptor).document
+        val document = app.get(url, headers = headers).document
         val results = document.select("article, div.item, div.post, .result-item, .animation-2, div.box").mapNotNull { it.toSearchResult() }.distinctBy { it.url }
         return newSearchResponseList(results, results.isNotEmpty())
     }
 
     override suspend fun load(url: String): LoadResponse {
-        val document = app.get(url, headers = headers, interceptor = AppUtils.cloudflareInterceptor).document
+        val document = app.get(url, headers = headers).document
 
         val title = document.selectFirst("meta[property=og:title]")?.attr("content")?.trim()
             ?: document.selectFirst("h1")?.text()?.trim()
@@ -201,7 +200,7 @@ class WatchOMoviesIndianProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val document = app.get(data, headers = headers, interceptor = AppUtils.cloudflareInterceptor).document
+        val document = app.get(data, headers = headers).document
         
         document.select("iframe, source, video").forEach { element ->
             val src = element.attr("src").ifBlank { element.attr("data-src") }
@@ -217,6 +216,11 @@ class WatchOMoviesIndianProvider : MainAPI() {
                 loadExtractor(fixUrl(href), data, subtitleCallback, callback)
             }
         }
+
+        return true
+    }
+}
+}
 
         return true
     }
