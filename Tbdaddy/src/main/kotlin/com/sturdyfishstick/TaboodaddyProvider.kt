@@ -27,8 +27,7 @@ class TaboodaddyProvider : MainAPI() {
     override var mainUrl = "https://taboodaddy.com"
     override var name = "Taboodaddy"
     override var lang = "en"
-    override va
-    l hasMainPage = true
+    override val hasMainPage = true
     override val supportedTypes = setOf(TvType.NSFW)
 
     override val mainPage = mainPageOf(
@@ -38,31 +37,30 @@ class TaboodaddyProvider : MainAPI() {
         "category/bangbros" to "BangBros",
         "category/bdsm" to "BDSM",
         "category/best" to "Best",
-        "category/brother-sister-porn" to "Brother Sister Porn"
+        "category/brother-sister-porn" to "Brother Sister Porn",
         "category/big-ass" to "Big Ass",
-        "category/big-dick" to "Big Dick"
-        "category/blacked" to "Blacked"
-        "category/christmas" to "Christmas"
-        "category/deep-throat" to "Deep Throat"
-        "category/deeper" to "Deeper"
-        "category/digital-playground" to "Digital Playground"
-        "category/familystrokes" to "FamilyStrokes"
-        "category/incent" to "Incent"
-        "category/milf" to "Milf"
-        "category/missax" to "Missax"
-        "category/mom-son-porn" to "Mom Son Porn"
-        "category/mommysboy" to "MommysBoy"
-        "category/puretaboo" to "Pure Taboo"
-        "category/realitykings" to "Realitykings"
+        "category/big-dick" to "Big Dick",
+        "category/blacked" to "Blacked",
+        "category/christmas" to "Christmas",
+        "category/deep-throat" to "Deep Throat",
+        "category/deeper" to "Deeper",
+        "category/digital-playground" to "Digital Playground",
+        "category/familystrokes" to "FamilyStrokes",
+        "category/incent" to "Incent",
+        "category/milf" to "Milf",
+        "category/missax" to "Missax",
+        "category/mom-son-porn" to "Mom Son Porn",
+        "category/mommysboy" to "MommysBoy",
+        "category/puretaboo" to "Pure Taboo",
+        "category/realitykings" to "Realitykings",
         "category/taboo" to "Taboo"
-        )
+    )
 
     private fun userAgent(): String = UA
 
     private suspend fun fetch(url: String, referer: String = "$mainUrl/"): String? =
         runCatching {
             app.get(
-              
                 url,
                 headers = mapOf(
                     "User-Agent" to userAgent(),
@@ -164,17 +162,13 @@ class TaboodaddyProvider : MainAPI() {
         val html = fetch(data) ?: return false
         val doc = Jsoup.parse(html)
 
-        // The video url can be in three places, in order of reliability.
         val candidates = LinkedHashSet<String>()
 
-        // 1. what the page declares about itself
         doc.selectFirst("meta[itemprop=contentUrl]")?.attr("content")
             ?.replace("&amp;", "&")?.trim()
             ?.takeIf { it.startsWith("http") }
             ?.let { candidates.add(it) }
 
-        // 2. the player iframe's payload. Posts without a contentUrl still carry the same url
-        //    inside it: q is base64url of "post_id=…&tag=<video…><source src='…m3u8'>…".
         doc.select("iframe[src]").forEach { frame ->
             val src = frame.attr("src").replace("&amp;", "&")
             Regex("[?&]q=([^&]+)").find(src)?.groupValues?.get(1)?.let { q ->
@@ -182,7 +176,6 @@ class TaboodaddyProvider : MainAPI() {
             }
         }
 
-        // 3. anything else that is literally a playlist or file in the page
         Regex("""https?://[^\s"'<>\\]+\.(?:m3u8|mp4)[^\s"'<>\\]*""")
             .findAll(html).map { it.value.replace("&amp;", "&") }
             .filter { !isAdHost(it) }
@@ -199,9 +192,6 @@ class TaboodaddyProvider : MainAPI() {
                     url = url,
                     type = if (url.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                 ) {
-                    // The capture is specific about this: the browser sent video.twimg.com an
-                    // Origin and no Referer at all, and the CDN echoed the Origin back. A foreign
-                    // Referer is what gets a 403 here.
                     this.referer = ""
                     this.quality = Qualities.Unknown.value
                     this.headers = mapOf(
@@ -215,14 +205,6 @@ class TaboodaddyProvider : MainAPI() {
         return true
     }
 
-    /**
-     * Pulls the media url out of the player iframe's base64 "q" payload.
-     *
-     * url-encoded base64url, so it has to be undone in that order: percent-decode, map -_ back
-     * to +/, restore the padding the url may have eaten, base64-decode, then percent-decode the
-     * html that comes out. Without the padding step the decoder throws on any value whose length
-     * is not a multiple of four, and the link silently disappears.
-     */
     private fun decodePlayerTag(qRaw: String): String? = runCatching {
         val q = java.net.URLDecoder.decode(qRaw, "UTF-8")
             .replace(' ', '+')
