@@ -6,7 +6,7 @@ import com.lagradost.cloudstream3.utils.Qualities
 
 class Fsi52Provider : MainAPI() {
     override var mainUrl = "https://fsi52.com"
-    override var name = "Desi 18+"
+    override var name = "Fsi Blog"
     override val hasMainPage = true
     override val hasDownloadSupport = true
 
