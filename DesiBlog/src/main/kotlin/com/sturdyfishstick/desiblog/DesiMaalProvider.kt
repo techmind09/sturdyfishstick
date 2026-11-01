@@ -2,6 +2,7 @@ package com.sturdyfishstick.desiblog
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
 import com.fasterxml.jackson.annotation.JsonProperty
 
@@ -157,7 +158,7 @@ class DesiMaalProvider : MainAPI() {
             return true
         }
 
-        // 2. Agar URL me video ID maujood hai toh API call karein (e.g. /video/.../{id})
+        // 2. Agar URL me video ID maujood hai toh API call karein
         val videoId = data.trimEnd('/').split("/").lastOrNull()
         if (!videoId.isNullOrBlank()) {
             try {
