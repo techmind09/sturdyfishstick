@@ -155,6 +155,8 @@ class TellyHD : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val loadData = tryParseJson<LinkData>(data) ?: return false
+
+        // Dooplayer AJAX request to get the embed HTML/JSON
         val res = app.post(
             url = "$mainUrl/wp-admin/admin-ajax.php",
             data = mapOf(
@@ -163,21 +165,31 @@ class TellyHD : MainAPI() {
                 "nume" to "${loadData.nume}",
                 "type" to "${loadData.type}"
             ),
-            referer = data,
+            referer = "$mainUrl/",
             headers = mapOf(
                 "Accept" to "*/*",
-                "X-Requested-With" to "XMLHttpRequest"
+                "X-Requested-With" to "XMLHttpRequest",
+                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             )
         ).text
 
-        val iframeUrl = Regex(""""embed_url"\s*:\s*"([^"]+)"""").find(res)?.groupValues?.get(1)?.replace("\\/", "/")?.getIframe() 
-            ?: Regex("src=['\"]([^'\"]+)['\"]").find(res)?.groupValues?.get(1) 
-            ?: return false
+        // Extract embed_url value safely from JSON response
+        val embedHtml = Regex(""""embed_url"\s*:\s*"([^"]+)"""").find(res)?.groupValues?.get(1)?.replace("\\/", "/") ?: res
 
-        val finalIframe = if (iframeUrl.startsWith("//")) "https:$iframeUrl" else iframeUrl
+        // Extract the actual iframe src URL (e.g., https://telly.xin/play?v=...)
+        val iframeUrl = Regex("src=['\"]([^'\"]+)['\"]").find(embedHtml)?.groupValues?.get(1) 
+            ?: Jsoup.parse(embedHtml).select("iframe").attr("src")
+            .ifEmpty { embedHtml }
 
-        if (!finalIframe.contains("youtube")) {
-            if (finalIframe.contains("telly.xin")) {
+        val finalIframe = when {
+            iframeUrl.startsWith("//") -> "https:$iframeUrl"
+            else -> iframeUrl
+        }.trim()
+
+        if (finalIframe.isEmpty() || finalIframe.contains("about:blank")) return false
+
+        if (!finalIframe.contains("youtube", ignoreCase = true)) {
+            if (finalIframe.contains("telly.xin", ignoreCase = true) || finalIframe.contains("ultrastream", ignoreCase = true)) {
                 TellyXin().getUrl(finalIframe, "$mainUrl/")?.forEach(callback)
             } else {
                 loadExtractor(finalIframe, "$mainUrl/", subtitleCallback, callback)
@@ -193,10 +205,6 @@ class TellyHD : MainAPI() {
             this.hasAttr("srcset") -> this.attr("abs:srcset").substringBefore(" ")
             else -> this.attr("abs:src")
         }
-    }
-
-    private fun String.getIframe(): String {
-        return Jsoup.parse(this).select("iframe").attr("src").ifEmpty { this }
     }
 
     data class LinkData(
