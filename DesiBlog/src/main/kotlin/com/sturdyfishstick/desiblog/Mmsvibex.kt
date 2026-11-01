@@ -14,14 +14,14 @@ class Mmsvibex : MainAPI() {
     override val mainPage = mainPageOf(
         "category/indian/" to "Indian",
         "category/desi/" to "Desi",
-        "category/arab/" to "Arab"
-        "category/faphouse/" to "Faphouse"
-        "category/nepali/" to "Nepali"
-        "category/pakistani/" to "Pakistani"
-        "category/sri-lankan/" to "Sri Lankan"
-        "category/uncategorized/" to "Uncategorized"
+        "category/arab/" to "Arab",
+        "category/faphouse/" to "Faphouse",
+        "category/nepali/" to "Nepali",
+        "category/pakistani/" to "Pakistani",
+        "category/sri-lankan/" to "Sri Lankan",
+        "category/uncategorized/" to "Uncategorized",
         "category/other/" to "Other"
-     )
+    )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         // page 1 is the bare path; later pages are /<path>/page/N/
@@ -43,7 +43,7 @@ class Mmsvibex : MainAPI() {
             "$mainUrl/wp-json/mmsvibe/v1/search-suggest",
             params = mapOf("q" to query)
         )
-        return response.parsed<List<Map<String, Any>>>().mapNotNull { item ->
+        return response.parsed<List>>().mapNotNull { item ->
             val title = item["title"] as? String ?: return@mapNotNull null
             val url = item["url"] as? String ?: return@mapNotNull null
             val poster = item["thumbnail"] as? String
