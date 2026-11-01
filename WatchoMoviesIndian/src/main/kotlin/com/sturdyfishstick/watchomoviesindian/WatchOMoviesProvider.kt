@@ -70,7 +70,8 @@ class WatchOMoviesIndianProvider : MainAPI() {
         }
         
         val document = app.get(url, headers = headers).document
-        val home = document.select("article, div.item, div.post, div.flix-item, .result-item, .animation-2, div.box").mapNotNull { it.toSearchResult() }
+        // Updated selectors specifically tailored for PsyPlay theme items grid
+        val home = document.select("article.item, div.item, .result-item, .animation-2, div.box, div.items article").mapNotNull { it.toSearchResult() }
         
         return newHomePageResponse(
             list = HomePageList(
@@ -120,14 +121,14 @@ class WatchOMoviesIndianProvider : MainAPI() {
         val encoded = URLEncoder.encode(query.trim(), "UTF-8")
         val url = "$mainUrl/?s=$encoded"
         val document = app.get(url, headers = headers).document
-        return document.select("article, div.item, div.post, .result-item, .animation-2, div.box").mapNotNull { it.toSearchResult() }.distinctBy { it.url }
+        return document.select("article.item, div.item, .result-item, .animation-2, div.box").mapNotNull { it.toSearchResult() }.distinctBy { it.url }
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
         val encoded = URLEncoder.encode(query.trim(), "UTF-8")
         val url = "$mainUrl/page/$page/?s=$encoded"
         val document = app.get(url, headers = headers).document
-        val results = document.select("article, div.item, div.post, .result-item, .animation-2, div.box").mapNotNull { it.toSearchResult() }.distinctBy { it.url }
+        val results = document.select("article.item, div.item, .result-item, .animation-2, div.box").mapNotNull { it.toSearchResult() }.distinctBy { it.url }
         return newSearchResponseList(results, results.isNotEmpty())
     }
 
@@ -151,7 +152,7 @@ class WatchOMoviesIndianProvider : MainAPI() {
             .filter { it.isNotBlank() }
             .distinct()
 
-        val recommendations = document.select("article, div.item, .related-posts article, .animation-2")
+        val recommendations = document.select("article.item, div.item, .related-posts article, .animation-2")
             .mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
             .filter { it.url != url }
