@@ -39,11 +39,12 @@ class Mmsvibex : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val response = app.get(
+        val res = app.get(
             "$mainUrl/wp-json/mmsvibe/v1/search-suggest",
             params = mapOf("q" to query)
-        )
-        return response.parsed<List>>().mapNotNull { item ->
+        ).parsedSafe<List>>() ?: return emptyList()
+
+        return res.mapNotNull { item ->
             val title = item["title"] as? String ?: return@mapNotNull null
             val url = item["url"] as? String ?: return@mapNotNull null
             val poster = item["thumbnail"] as? String
