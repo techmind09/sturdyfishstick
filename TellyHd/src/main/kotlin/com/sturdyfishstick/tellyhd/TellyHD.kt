@@ -141,48 +141,64 @@ class TellyHD : MainAPI() {
         }
     }
 
-    override suspend fun loadLinks(
+        override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-           val loadData = tryParseJson<LinkData>(data)
-           val iframe= app.post(
-           url = "$mainUrl/wp-admin/admin-ajax.php", data = mapOf(
-                  "action" to "doo_player_ajax", "post" to "${loadData?.post}", "nume" to "${loadData?.nume}", "type" to "${loadData?.type}"
-               ), referer = data, headers = mapOf("Accept" to "*/*", "X-Requested-With" to "XMLHttpRequest"
-               )).parsed<ResponseHash>().embedUrl.getIframe()
-            if (!data.contains("youtube")) loadExtractor(
-                iframe,
-                "$directUrl/",
-                subtitleCallback,
-                callback
-            )
+        val loadData = tryParseJson<LinkData>(data) ?: return false
+        val refererUrl = loadData.url ?: "$mainUrl/"
+
+        val apiUrl = "$mainUrl/wp-json/dooplayer/v2/${loadData.post}/${loadData.type}/${loadData.nume}"
+        val apiRes = runCatching { app.get(apiUrl, headers = headers).text }.getOrNull() ?: ""
+
+        // API response se embed_url nikal kar slashes aur quotes clean karein
+        val rawEmbed = Regex(""""embed_url"\s*:\s*"([^"]+)"""").find(apiRes)?.groupValues?.get(1) ?: ""
+        val embedUrl = rawEmbed.replace("\\/", "/").replace("\\\"", "\"")
+
+        // Jsoup se iframe ka src attribute nikalna
+        var iframeUrl = Jsoup.parse(embedUrl).select("iframe").attr("src")
+        if (iframeUrl.isEmpty()) {
+            iframeUrl = Regex("src=['\"]([^'\"]+)['\"]").find(embedUrl)?.groupValues?.get(1) ?: embedUrl
+        }
+
+        if (iframeUrl.isEmpty() || iframeUrl.contains("about:blank")) {
+            val doc = app.get(refererUrl, headers = headers).document
+            iframeUrl = doc.select("iframe").attr("src")
+                .ifEmpty { doc.select("source").attr("src") }
+        }
+
+        val finalIframe = when {
+            iframeUrl.startsWith("//") -> "https:$iframeUrl"
+            else -> iframeUrl
+        }.trim()
+
+        if (finalIframe.isEmpty() || finalIframe.contains("about:blank")) return false
+
+        if (!finalIframe.contains("youtube", ignoreCase = true)) {
+            when {
+                finalIframe.contains("telly.xin", ignoreCase = true) || finalIframe.contains("ultrastream", ignoreCase = true) -> {
+                    TellyXin().getUrl(finalIframe, refererUrl)?.forEach(callback)
+                }
+                finalIframe.contains("cdntelly.sbs", ignoreCase = true) -> {
+                    loadExtractor(finalIframe, refererUrl, subtitleCallback, callback)
+                }
+                finalIframe.contains("pixeldrain.com", ignoreCase = true) -> {
+                    val id = finalIframe.substringAfterLast("/").substringBefore("?")
+                    callback.invoke(
+                        newExtractorLink("PixelDrain", "PixelDrain", "https://pixeldrain.com/api/file/$id?download", ExtractorLinkType.VIDEO) {
+                            this.quality = Qualities.P1080.value
+                        }
+                    )
+                }
+                finalIframe.contains("vcloud") || finalIframe.contains("hubcloud") -> {
+                    VCloud().getUrl(finalIframe, refererUrl, subtitleCallback, callback)
+                }
+                else -> {
+                    loadExtractor(finalIframe, refererUrl, subtitleCallback, callback)
+                }
+            }
+        }
         return true
-        }
-
-    private fun Element.getImageAttr(): String {
-        return when {
-            this.hasAttr("data-src") -> this.attr("abs:data-src")
-            this.hasAttr("data-lazy-src") -> this.attr("abs:data-lazy-src")
-            this.hasAttr("srcset") -> this.attr("abs:srcset").substringBefore(" ")
-            else -> this.attr("abs:src")
-        }
     }
-
-    private fun String.getIframe(): String {
-        return Jsoup.parse(this).select("iframe").attr("src")
-    }
-
-    data class LinkData(
-        val type: String? = null,
-        val post: String? = null,
-        val nume: String? = null,
-    )
-    data class ResponseHash(
-        @JsonProperty("embed_url")
-        val embedUrl: String,
-        val type: String,
-    )
-}
