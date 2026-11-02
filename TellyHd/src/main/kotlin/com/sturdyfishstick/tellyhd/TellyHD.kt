@@ -13,7 +13,7 @@ import java.time.Year
 
 class TellyHD : MainAPI() {
 
-    override var mainUrl: String = "https://tellyhd.st"
+    override var mainUrl: String = "https://tellyhd.si"
     override var name = "TellyHD"
     override val hasMainPage = true
     override var lang = "hi"
@@ -127,7 +127,7 @@ class TellyHD : MainAPI() {
                 if (post.isNullOrEmpty() || nume.isNullOrEmpty()) return@mapNotNull null
                 if (name.contains("trailer", ignoreCase = true)) return@mapNotNull null
 
-                val json = LinkData(type, post, nume).toJson()
+                val json = LinkData(type, post, nume, url).toJson()
                 newEpisode(json) {
                     this.name = name.ifEmpty { "Server" }
                 }
@@ -146,32 +146,38 @@ class TellyHD : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val loadData = tryParseJson<LinkData>(data) ?: return false
+        val refererUrl = loadData.url ?: "$mainUrl/"
 
-        // Dooplayer AJAX request
-        val res = app.post(
-            url = "$mainUrl/wp-admin/admin-ajax.php",
-            data = mapOf(
-                "action" to "doo_player_ajax",
-                "post" to "${loadData.post}",
-                "nume" to "${loadData.nume}",
-                "type" to "${loadData.type}"
-            ),
-            referer = data,
-            headers = mapOf(
-                "Accept" to "*/*",
-                "X-Requested-With" to "XMLHttpRequest",
-                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            )
-        ).text
+        // 1. Primary: Direct WP-JSON Dooplayer API (As seen in Network Inspector)
+        val apiUrl = "$mainUrl/wp-json/dooplayer/v2/${loadData.post}/${loadData.type}/${loadData.nume}"
+        val apiRes = runCatching { app.get(apiUrl, headers = headers).text }.getOrNull() ?: ""
 
-        // Safely parse through tryParseJson instead of parsed<>
-        val embedUrl = tryParseJson<ResponseHash>(res)?.embedUrl 
-            ?: Regex(""""embed_url"\s*:\s*"([^"]+)"""").find(res)?.groupValues?.get(1)?.replace("\\/", "/") ?: res
+        var embedUrl = tryParseJson<ResponseHash>(apiRes)?.embedUrl 
+            ?: Regex(""""embed_url"\s*:\s*"([^"]+)"""").find(apiRes)?.groupValues?.get(1)?.replace("\\/", "/") ?: ""
+
+        // 2. Secondary Fallback: AJAX Post Request if REST API fails
+        if (embedUrl.isEmpty() || embedUrl.contains("about:blank")) {
+            val ajaxRes = app.post(
+                url = "$mainUrl/wp-admin/admin-ajax.php",
+                data = mapOf(
+                    "action" to "doo_player_ajax",
+                    "post" to "${loadData.post}",
+                    "nume" to "${loadData.nume}",
+                    "type" to "${loadData.type}"
+                ),
+                referer = refererUrl,
+                headers = headers
+            ).text
+
+            embedUrl = tryParseJson<ResponseHash>(ajaxRes)?.embedUrl 
+                ?: Regex(""""embed_url"\s*:\s*"([^"]+)"""").find(ajaxRes)?.groupValues?.get(1)?.replace("\\/", "/") ?: ajaxRes
+        }
 
         var iframeUrl = embedUrl.getIframe()
 
-        if (iframeUrl.isEmpty() || iframeUrl.contains("about:blank") || iframeUrl == res) {
-            val doc = app.get("$mainUrl/?p=${loadData.post}", headers = headers).document
+        // 3. Ultimate Fallback: Scrape the post page directly
+        if (iframeUrl.isEmpty() || iframeUrl.contains("about:blank")) {
+            val doc = app.get(refererUrl, headers = headers).document
             iframeUrl = doc.select("iframe").attr("src")
                 .ifEmpty { doc.select("source").attr("src") }
         }
@@ -185,11 +191,11 @@ class TellyHD : MainAPI() {
 
         if (!finalIframe.contains("youtube", ignoreCase = true)) {
             if (finalIframe.contains("telly.xin", ignoreCase = true) || finalIframe.contains("ultrastream", ignoreCase = true)) {
-                TellyXin().getUrl(finalIframe, "$mainUrl/")?.forEach(callback)
+                TellyXin().getUrl(finalIframe, refererUrl)?.forEach(callback)
             } else {
                 loadExtractor(
                     finalIframe,
-                    "$mainUrl/",
+                    refererUrl,
                     subtitleCallback,
                     callback
                 )
@@ -216,6 +222,7 @@ class TellyHD : MainAPI() {
         val type: String? = null,
         val post: String? = null,
         val nume: String? = null,
+        val url: String? = null,
     )
 
     data class ResponseHash(
