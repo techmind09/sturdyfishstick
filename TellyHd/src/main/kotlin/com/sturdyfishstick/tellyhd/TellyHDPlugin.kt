@@ -19,11 +19,13 @@ class TellyHDPlugin : Plugin() {
         registerExtractorAPI(Luluvid())
         registerExtractorAPI(Xtapes())
         registerExtractorAPI(Ultrastream())
-        registerExtractorAPI(TellyXin()) // Added TellyXin registration here
+        registerExtractorAPI(TellyXin())
+        registerExtractorAPI(FastDL())
+        registerExtractorAPI(VCloud())
     }
 
     companion object {
-        var cachedDomains: Domains = Domains("https://tellyhd.st")
+        var cachedDomains: Domains = Domains("https://tellyhd.si")
 
         suspend fun getDomains(forceRefresh: Boolean = false): Domains {
             return cachedDomains
