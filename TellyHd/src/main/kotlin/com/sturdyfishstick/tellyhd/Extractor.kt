@@ -5,6 +5,7 @@ import com.lagradost.cloudstream3.extractors.LuluStream
 import com.lagradost.cloudstream3.extractors.VidhideExtractor
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.INFER_TYPE
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.getQualityFromName
@@ -47,6 +48,78 @@ class TellyXin : ExtractorApi() {
                 this.quality = Qualities.P1080.value
             }
         )
+    }
+}
+
+class FastDL : ExtractorApi() {
+    override val name: String = "FastDL"
+    override val mainUrl: String = "https://fastdl.beer"
+    override val requiresReferer = false
+
+    override suspend fun getUrl(
+        url: String,
+        referer: String?,
+        subtitleCallback: (com.lagradost.cloudstream3.SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        if (url.contains("link=")) {
+            val direct = url.substringAfter("link=").substringBefore("&")
+            if (direct.startsWith("http")) {
+                callback.invoke(
+                    newExtractorLink(name, name, direct, ExtractorLinkType.VIDEO) {
+                        this.quality = Qualities.Unknown.value
+                    }
+                )
+                return
+            }
+        }
+    }
+}
+
+class VCloud : ExtractorApi() {
+    override val name: String = "FSL Server"
+    override val mainUrl: String = "https://vcloud.beer"
+    override val requiresReferer = false
+
+    override suspend fun getUrl(
+        url: String,
+        referer: String?,
+        subtitleCallback: (com.lagradost.cloudstream3.SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        var href = url
+        if (href.contains("api/index.php")) {
+            href = runCatching {
+                app.get(url).document.selectFirst("div.main h4 a")?.attr("href")
+            }.getOrNull() ?: href
+        }
+
+        val doc = runCatching { app.get(href, referer = referer).document }.getOrNull() ?: return
+        val div = doc.selectFirst("div.card-body") ?: return
+
+        div.select("a[href]").forEach { el ->
+            val link = el.attr("href")
+            val text = el.text()
+            if (!link.startsWith("http")) return@forEach
+
+            when {
+                text.contains("FSL", ignoreCase = true) || text.contains("FastServer", ignoreCase = true) -> {
+                    callback.invoke(
+                        newExtractorLink("FSL Server", "FSL Server", link, ExtractorLinkType.VIDEO) {
+                            this.quality = Qualities.P1080.value
+                        }
+                    )
+                }
+                link.contains("pixeldrain.com") -> {
+                    val id = link.substringAfterLast("/").substringBefore("?")
+                    callback.invoke(
+                        newExtractorLink("PixelDrain", "PixelDrain", "https://pixeldrain.com/api/file/$id?download", ExtractorLinkType.VIDEO) {
+                            this.quality = Qualities.P1080.value
+                        }
+                    )
+                }
+            }
+        }
     }
 }
 
