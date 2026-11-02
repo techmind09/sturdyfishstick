@@ -148,34 +148,15 @@ class TellyHD : MainAPI() {
         val loadData = tryParseJson<LinkData>(data) ?: return false
         val refererUrl = loadData.url ?: "$mainUrl/"
 
-        // 1. Primary: Direct WP-JSON Dooplayer API (As seen in Network Inspector)
+        // Dooplayer v2 REST API request
         val apiUrl = "$mainUrl/wp-json/dooplayer/v2/${loadData.post}/${loadData.type}/${loadData.nume}"
         val apiRes = runCatching { app.get(apiUrl, headers = headers).text }.getOrNull() ?: ""
 
-        var embedUrl = tryParseJson<ResponseHash>(apiRes)?.embedUrl 
+        val embedUrl = tryParseJson<ResponseHash>(apiRes)?.embedUrl 
             ?: Regex(""""embed_url"\s*:\s*"([^"]+)"""").find(apiRes)?.groupValues?.get(1)?.replace("\\/", "/") ?: ""
-
-        // 2. Secondary Fallback: AJAX Post Request if REST API fails
-        if (embedUrl.isEmpty() || embedUrl.contains("about:blank")) {
-            val ajaxRes = app.post(
-                url = "$mainUrl/wp-admin/admin-ajax.php",
-                data = mapOf(
-                    "action" to "doo_player_ajax",
-                    "post" to "${loadData.post}",
-                    "nume" to "${loadData.nume}",
-                    "type" to "${loadData.type}"
-                ),
-                referer = refererUrl,
-                headers = headers
-            ).text
-
-            embedUrl = tryParseJson<ResponseHash>(ajaxRes)?.embedUrl 
-                ?: Regex(""""embed_url"\s*:\s*"([^"]+)"""").find(ajaxRes)?.groupValues?.get(1)?.replace("\\/", "/") ?: ajaxRes
-        }
 
         var iframeUrl = embedUrl.getIframe()
 
-        // 3. Ultimate Fallback: Scrape the post page directly
         if (iframeUrl.isEmpty() || iframeUrl.contains("about:blank")) {
             val doc = app.get(refererUrl, headers = headers).document
             iframeUrl = doc.select("iframe").attr("src")
@@ -194,7 +175,7 @@ class TellyHD : MainAPI() {
                 TellyXin().getUrl(finalIframe, refererUrl)?.forEach(callback)
             } else {
                 loadExtractor(
-                    finalIframe,
+                    finalIformat(finalIframe),
                     refererUrl,
                     subtitleCallback,
                     callback
@@ -203,6 +184,8 @@ class TellyHD : MainAPI() {
         }
         return true
     }
+
+    private fun finalIformat(url: String): String = url
 
     private fun Element.getImageAttr(): String {
         return when {
