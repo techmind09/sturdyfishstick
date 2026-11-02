@@ -1,6 +1,7 @@
 package com.sturdyfishstick.tellyhd
 
 import android.annotation.SuppressLint
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
@@ -113,6 +114,7 @@ class TellyHD : MainAPI() {
         }
         val description = document.select("div.wp-content > p").text().trim()
         
+        // Broadened selector to catch all servers (Ultra Stream, Lulustream, DoodStream, etc.)
         val episodes = document.select("ul#playeroptionsul > li, div.play-options li, .sources-box li, .dooplay_player_option, .options li")
             .mapNotNull { element ->
                 val name = element.selectFirst("span.title")?.text()?.trim()
@@ -132,18 +134,10 @@ class TellyHD : MainAPI() {
                 }
             }.distinctBy { it.name }
 
-        val isMovie = url.contains("/movies/") || episodes.size <= 1
-
-        return if (isMovie && episodes.isNotEmpty()) {
-            newMovieLoadResponse(title, url, TvType.Movie, episodes.first().data) {
-                this.posterUrl = posterUrl
-                this.plot = description
-            }
-        } else {
-            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
-                this.posterUrl = posterUrl
-                this.plot = description
-            }
+        // FIX: Return TvSeries response for movies too so ALL servers (Lulustream, Doodstream, etc.) are listed
+        return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+            this.posterUrl = posterUrl
+            this.plot = description
         }
     }
 
@@ -155,7 +149,7 @@ class TellyHD : MainAPI() {
     ): Boolean {
         val loadData = tryParseJson<LinkData>(data) ?: return false
 
-        // 1. First try: Dooplayer AJAX request
+        // Dooplayer AJAX request
         val res = app.post(
             url = "$mainUrl/wp-admin/admin-ajax.php",
             data = mapOf(
@@ -164,7 +158,7 @@ class TellyHD : MainAPI() {
                 "nume" to "${loadData.nume}",
                 "type" to "${loadData.type}"
             ),
-            referer = "$mainUrl/",
+            referer = data,
             headers = mapOf(
                 "Accept" to "*/*",
                 "X-Requested-With" to "XMLHttpRequest",
@@ -172,13 +166,14 @@ class TellyHD : MainAPI() {
             )
         ).text
 
-        var embedHtml = Regex(""""embed_url"\s*:\s*"([^"]+)"""").find(res)?.groupValues?.get(1)?.replace("\\/", "/") ?: res
+        // Parse through ResponseHash safely or fallback to regex extraction
+        val embedUrl = runCatching {
+            res.parsed<ResponseHash>().embedUrl
+        }.getOrNull() ?: Regex(""""embed_url"\s*:\s*"([^"]+)"""").find(res)?.groupValues?.get(1)?.replace("\\/", "/") ?: res
 
-        var iframeUrl = Regex("src=['\"]([^'\"]+)['\"]").find(embedHtml)?.groupValues?.get(1) 
-            ?: Jsoup.parse(embedHtml).select("iframe").attr("src")
-            .ifEmpty { embedHtml }
+        var iframeUrl = embedUrl.getIframe()
 
-        // 2. Fallback: If AJAX response doesn't give a valid player URL, scrape the source page directly using post ID
+        // Fallback: If AJAX response doesn't give a valid iframe URL, scrape the post page directly
         if (iframeUrl.isEmpty() || iframeUrl.contains("about:blank") || iframeUrl == res) {
             val doc = app.get("$mainUrl/?p=${loadData.post}", headers = headers).document
             iframeUrl = doc.select("iframe").attr("src")
@@ -190,20 +185,21 @@ class TellyHD : MainAPI() {
             else -> iframeUrl
         }.trim()
 
-        if (finalIframe.isEmpty() || finalNolinksFound(finalIframe)) return false
+        if (finalIframe.isEmpty() || finalIframe.contains("about:blank")) return false
 
         if (!finalIframe.contains("youtube", ignoreCase = true)) {
             if (finalIframe.contains("telly.xin", ignoreCase = true) || finalIframe.contains("ultrastream", ignoreCase = true)) {
                 TellyXin().getUrl(finalIframe, "$mainUrl/")?.forEach(callback)
             } else {
-                loadExtractor(finalIframe, "$mainUrl/", subtitleCallback, callback)
+                loadExtractor(
+                    finalIframe,
+                    "$mainUrl/",
+                    subtitleCallback,
+                    callback
+                )
             }
         }
         return true
-    }
-
-    private fun finalNolinksFound(url: String): Boolean {
-        return url.contains("about:blank")
     }
 
     private fun Element.getImageAttr(): String {
@@ -215,9 +211,20 @@ class TellyHD : MainAPI() {
         }
     }
 
+    private fun String.getIframe(): String {
+        val extracted = Jsoup.parse(this).select("iframe").attr("src")
+        return extracted.ifEmpty { this }
+    }
+
     data class LinkData(
         val type: String? = null,
         val post: String? = null,
         val nume: String? = null,
+    )
+
+    data class ResponseHash(
+        @JsonProperty("embed_url")
+        val embedUrl: String,
+        val type: String? = null,
     )
 }
