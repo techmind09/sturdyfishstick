@@ -148,14 +148,17 @@ class TellyHD : MainAPI() {
         val loadData = tryParseJson<LinkData>(data) ?: return false
         val refererUrl = loadData.url ?: "$mainUrl/"
 
-        // Dooplayer v2 REST API request
+        // Dooplayer v2 REST API request with specific server 'nume' index
         val apiUrl = "$mainUrl/wp-json/dooplayer/v2/${loadData.post}/${loadData.type}/${loadData.nume}"
         val apiRes = runCatching { app.get(apiUrl, headers = headers).text }.getOrNull() ?: ""
 
         val embedUrl = tryParseJson<ResponseHash>(apiRes)?.embedUrl 
-            ?: Regex(""""embed_url"\s*:\s*"([^"]+)"""").find(apiRes)?.groupValues?.get(1)?.replace("\\/", "/") ?: ""
+            ?: Regex(""""embed_url"\s*:\s*"([^"]+)"""").find(apiRes)?.groupValues?.get(1)?.replace("\\\\/", "/")?.replace("\\\"", "\"") ?: ""
 
-        var iframeUrl = embedUrl.getIframe()
+        var iframeUrl = Jsoup.parse(embedUrl).select("iframe").attr("src")
+        if (iframeUrl.isEmpty()) {
+            iframeUrl = Regex("src=['\"]([^'\"]+)['\"]").find(embedUrl)?.groupValues?.get(1) ?: embedUrl
+        }
 
         if (iframeUrl.isEmpty() || iframeUrl.contains("about:blank")) {
             val doc = app.get(refererUrl, headers = headers).document
