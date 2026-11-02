@@ -77,7 +77,7 @@ class Xtapes : VidhideExtractor() {
 
 class Luluvid : LuluStream() {
     override val name = "Lulustream"
-    override val mainUrl = "https://luluvid.com"
+    override val mainUrl = "https://lulustream.com"
 }
 
 class Ultrastream : VidhideExtractor() {
@@ -87,17 +87,13 @@ class Ultrastream : VidhideExtractor() {
 
 open class Ds2play : ExtractorApi() {
     override var name = "DoodStream"
-    override var mainUrl = "https://ds2play.com"
+    override var mainUrl = "https://dood.wf"
     override val requiresReferer = false
 
-    override fun getExtractorUrl(id: String): String {
-        return "https://dood.wf/d/$id"
-    }
-
     override suspend fun getUrl(url: String, referer: String?): List<ExtractorLink>? {
-        val response0 = app.get(url).text
+        val response0 = app.get(url, referer = referer).text
         val md5Regex = Regex("/pass_md5/[^'\"<>]+").find(response0)?.value ?: return null
-        val md5Url = if (md5Regex.startsWith("http")) md5Regex else mainUrl + md5Regex
+        val md5Url = if (md5Regex.startsWith("http")) md5Regex else "https://dood.wf" + md5Regex
         
         val md5Response = app.get(md5Url, referer = url).text
         val trueUrl = md5Response + "zUEJeL3mUN?token=" + md5Url.substringAfterLast("/")
@@ -110,7 +106,7 @@ open class Ds2play : ExtractorApi() {
                 name = this.name,
                 url = trueUrl
             ) {
-                this.referer = mainUrl
+                this.referer = "https://dood.wf"
                 this.quality = getQualityFromName(quality)
             }
         )
