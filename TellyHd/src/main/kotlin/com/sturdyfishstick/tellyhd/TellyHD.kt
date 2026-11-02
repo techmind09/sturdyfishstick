@@ -114,7 +114,6 @@ class TellyHD : MainAPI() {
         }
         val description = document.select("div.wp-content > p").text().trim()
         
-        // Broadened selector to catch all servers (Ultra Stream, Lulustream, DoodStream, etc.)
         val episodes = document.select("ul#playeroptionsul > li, div.play-options li, .sources-box li, .dooplay_player_option, .options li")
             .mapNotNull { element ->
                 val name = element.selectFirst("span.title")?.text()?.trim()
@@ -134,7 +133,6 @@ class TellyHD : MainAPI() {
                 }
             }.distinctBy { it.name }
 
-        // FIX: Return TvSeries response for movies too so ALL servers (Lulustream, Doodstream, etc.) are listed
         return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
             this.posterUrl = posterUrl
             this.plot = description
@@ -166,14 +164,12 @@ class TellyHD : MainAPI() {
             )
         ).text
 
-        // Parse through ResponseHash safely or fallback to regex extraction
-        val embedUrl = runCatching {
-            res.parsed<ResponseHash>().embedUrl
-        }.getOrNull() ?: Regex(""""embed_url"\s*:\s*"([^"]+)"""").find(res)?.groupValues?.get(1)?.replace("\\/", "/") ?: res
+        // Safely parse through tryParseJson instead of parsed<>
+        val embedUrl = tryParseJson<ResponseHash>(res)?.embedUrl 
+            ?: Regex(""""embed_url"\s*:\s*"([^"]+)"""").find(res)?.groupValues?.get(1)?.replace("\\/", "/") ?: res
 
         var iframeUrl = embedUrl.getIframe()
 
-        // Fallback: If AJAX response doesn't give a valid iframe URL, scrape the post page directly
         if (iframeUrl.isEmpty() || iframeUrl.contains("about:blank") || iframeUrl == res) {
             val doc = app.get("$mainUrl/?p=${loadData.post}", headers = headers).document
             iframeUrl = doc.select("iframe").attr("src")
