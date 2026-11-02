@@ -38,7 +38,6 @@ class Perverzija : MainAPI() {
         val url = request.data.format(page)
         val document = app.get(url, interceptor = cfInterceptor, timeout = 100L).document
         
-        // Multi-selector to handle both modern grid styles & template variations across the site
         val home = document.select("div.row div div.post, div.col-md-3").mapNotNull { it.toMainPageResult() }
 
         return newHomePageResponse(
@@ -52,7 +51,6 @@ class Perverzija : MainAPI() {
     }
 
     private fun Element.toMainPageResult(): SearchResponse? {
-        // Fallback checks for various poster and link structures
         val posterUrl = fixUrlNull(
             this.selectFirst("div.item-thumbnail img")?.attr("src") 
                 ?: this.selectFirst("img")?.attr("src") 
@@ -88,7 +86,12 @@ class Perverzija : MainAPI() {
         return newSearchResponseList(searchResults, hasNext = searchResults.isNotEmpty())
     }
 
-    override suspend fun quickSearch(query: String): List<SearchResponse>? = search(query).list
+    // Fix applied here: directly mapping search results to list for quick search
+    override suspend fun quickSearch(query: String): List<SearchResponse>? {
+        val url = "$mainUrl/?s=${query.replace(" ", "+")}"
+        val document = app.get(url, interceptor = cfInterceptor).document
+        return document.select("div.row div div.post, div.col-md-3").mapNotNull { it.toMainPageResult() }.distinctBy { it.url }
+    }
 
     override suspend fun load(url: String): LoadResponse? {
         val document = app.get(url, interceptor = cfInterceptor).document
@@ -156,7 +159,6 @@ class Perverzija : MainAPI() {
         Log.d("kraptor_$name", "data = $data")
         val document = app.get(data, interceptor = cfInterceptor).document
 
-        // Safely pull iframe sources from alternative container layouts
         val iframeUrl = document.selectFirst("div#player-embed iframe, iframe")?.attr("src")
 
         if (!iframeUrl.isNullOrBlank()) {
