@@ -83,10 +83,17 @@ class TellyHD : MainAPI() {
     private fun Element.toSearchResult(): SearchResponse? {
         val title = this.selectFirst("h3 > a")?.text() ?: return null
         val href = getProperLink(fixUrl(this.selectFirst("h3 > a")!!.attr("href")))
-        var posterUrl = this.select("div.poster img").last()?.getImageAttr()
+        
+        val imgElement = this.select("div.poster img").last()
+        var posterUrl = imgElement?.attr("data-src")?.takeIf { it.isNotEmpty() } 
+            ?: imgElement?.attr("data-lazy-src")?.takeIf { it.isNotEmpty() }
+            ?: imgElement?.attr("src")
+
         if (posterUrl != null && posterUrl.contains(".gif")) {
-            posterUrl = fixUrlNull(this.select("div.poster img").attr("data-wpfc-original-src"))
+            posterUrl = this.select("div.poster img").attr("data-wpfc-original-src").takeIf { it.isNotEmpty() } ?: posterUrl
         }
+        posterUrl = fixUrlNull(posterUrl)
+
         val quality = getQualityFromString(this.select("span.quality").text())
         return newMovieSearchResponse(title, href, TvType.NSFW) {
             this.posterUrl = posterUrl
@@ -141,7 +148,7 @@ class TellyHD : MainAPI() {
         }
     }
 
-        override suspend fun loadLinks(
+    override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
@@ -202,3 +209,11 @@ class TellyHD : MainAPI() {
         }
         return true
     }
+}
+
+data class LinkData(
+    @JsonProperty("type") val type: String?,
+    @JsonProperty("post") val post: String?,
+    @JsonProperty("nume") val nume: String?,
+    @JsonProperty("url") val url: String?
+)
