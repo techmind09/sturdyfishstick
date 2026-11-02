@@ -19,7 +19,6 @@ class TellyHD : MainAPI() {
     override var lang = "hi"
     override val supportedTypes = setOf(TvType.NSFW, TvType.TvSeries, TvType.Movie)
     override val vpnStatus = VPNStatus.MightBeNeeded
-    private val directUrl = ""
 
     private val headers = mapOf(
         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -148,7 +147,6 @@ class TellyHD : MainAPI() {
         val loadData = tryParseJson<LinkData>(data) ?: return false
         val refererUrl = loadData.url ?: "$mainUrl/"
 
-        // Dooplayer v2 REST API request with specific server 'nume' index
         val apiUrl = "$mainUrl/wp-json/dooplayer/v2/${loadData.post}/${loadData.type}/${loadData.nume}"
         val apiRes = runCatching { app.get(apiUrl, headers = headers).text }.getOrNull() ?: ""
 
@@ -157,7 +155,7 @@ class TellyHD : MainAPI() {
 
         var iframeUrl = Jsoup.parse(embedUrl).select("iframe").attr("src")
         if (iframeUrl.isEmpty()) {
-            iframeUrl = Regex("src=['\"]([^'\"]+)['\"]").find(embedUrl)?.groupValues?.get(1) ?: embedUrl
+            iframeUrl = Regex("src=['\"]([^'\"]+)['\"]").find(embedUrl)?.groupValues?.get(1) ?: iframeUrl
         }
 
         if (iframeUrl.isEmpty() || iframeUrl.contains("about:blank")) {
@@ -174,21 +172,28 @@ class TellyHD : MainAPI() {
         if (finalIframe.isEmpty() || finalIframe.contains("about:blank")) return false
 
         if (!finalIframe.contains("youtube", ignoreCase = true)) {
-            if (finalIframe.contains("telly.xin", ignoreCase = true) || finalIframe.contains("ultrastream", ignoreCase = true)) {
-                TellyXin().getUrl(finalIframe, refererUrl)?.forEach(callback)
-            } else {
-                loadExtractor(
-                    finalIformat(finalIframe),
-                    refererUrl,
-                    subtitleCallback,
-                    callback
-                )
+            when {
+                finalIframe.contains("telly.xin", ignoreCase = true) || finalIframe.contains("ultrastream", ignoreCase = true) -> {
+                    TellyXin().getUrl(finalIframe, refererUrl)?.forEach(callback)
+                }
+                finalIframe.contains("pixeldrain.com", ignoreCase = true) -> {
+                    val id = finalIframe.substringAfterLast("/").substringBefore("?")
+                    callback.invoke(
+                        newExtractorLink("PixelDrain", "PixelDrain", "https://pixeldrain.com/api/file/$id?download", ExtractorLinkType.VIDEO) {
+                            this.quality = Qualities.P1080.value
+                        }
+                    )
+                }
+                finalIframe.contains("vcloud") || finalIframe.contains("hubcloud") -> {
+                    VCloud().getUrl(finalIframe, refererUrl, subtitleCallback, callback)
+                }
+                else -> {
+                    loadExtractor(finalIframe, refererUrl, subtitleCallback, callback)
+                }
             }
         }
         return true
     }
-
-    private fun finalIformat(url: String): String = url
 
     private fun Element.getImageAttr(): String {
         return when {
@@ -197,11 +202,6 @@ class TellyHD : MainAPI() {
             this.hasAttr("srcset") -> this.attr("abs:srcset").substringBefore(" ")
             else -> this.attr("abs:src")
         }
-    }
-
-    private fun String.getIframe(): String {
-        val extracted = Jsoup.parse(this).select("iframe").attr("src")
-        return extracted.ifEmpty { this }
     }
 
     data class LinkData(
