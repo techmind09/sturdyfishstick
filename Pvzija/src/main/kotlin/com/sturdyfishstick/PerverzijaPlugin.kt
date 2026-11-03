@@ -1,4 +1,4 @@
-package com.sturdyfishstick
+package com.sturdyfishstick.pvzija
 
 import android.content.Context
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
@@ -9,6 +9,7 @@ class PerverzijaPlugin : Plugin() {
     override fun load(context: Context) {
         // All providers should be added in this manner. Please don't edit the providers list directly.
         registerMainAPI(Xtremestream())
+        registerMainAPI(PerverZija())
         registerExtractorAPI(Xtremestream())
         registerExtractorAPI(PerverZijaExtractor())
     }
