@@ -15,7 +15,7 @@ import org.jsoup.nodes.Element
  */
 class BluMoviesProvider : MainAPI() {
     override var mainUrl = "https://xxxparodyhd.net"
-    override var name = "Blu Movies"
+    override var name = "Pvzija"
     override var lang = "en"
     override val hasMainPage = true
     override val supportedTypes = setOf(TvType.NSFW)
