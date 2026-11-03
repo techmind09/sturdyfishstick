@@ -11,16 +11,7 @@ import org.jsoup.nodes.Element
 
 /**
  * Blu Movies (Android app, AF 6.2) - rebuilt from the decompiled APK.
- *
- * The app is a front-end for xxxparodyhd.net (strings were XOR/PRNG-obfuscated, decoded offline):
- *  - tabs   : New Movies  /page/{n}/
- *             Popular     /page/{n}/?filter=most-viewed
- *             Our Choice  /release-year/2026/page/{n}/
- *  - search : /page/{n}/?s={query}
- *  - cards  : article.card -> a[href], div.card__b>h2 (title), a>img (data-lazy-src|data-src|src), a>span.card__dur
- *  - detail : div.desc>p, span.st--duration, chips rows (Release Year / Studio / Genres / Pornstars)
- *  - servers: section.hlm[data-servers] = JSON [{"u": embed url, "l": label}]
- *             (streamtape, lulustream, doodstream/doply/playmogo, voe, vinovo, mixdrop, playmate, vidara)
+ * Updated with A-Z Director/Studio Categories.
  */
 class BluMoviesProvider : MainAPI() {
     override var mainUrl = "https://xxxparodyhd.net"
@@ -36,14 +27,56 @@ class BluMoviesProvider : MainAPI() {
     override val mainPage = mainPageOf(
         "page/%d/" to "New Movies",
         "page/%d/?filter=most-viewed" to "Popular Movies",
-        "release-year/2026/page/%d/" to "Our Choice",
+        
+        // --- Studios / Directors (Sorted A to Z) ---
+        "director/21-sextury-video-pulse/page/%d/" to "21 Sextury Video Pulse",
+        "director/adult-source-media/page/%d/" to "Adult Source Media",
+        "director/bang/page/%d/" to "Bang",
+        "director/blacked/page/%d/" to "Blacked",
+        "director/brazzers/page/%d/" to "Brazzers",
+        "director/cutie-pie/page/%d/" to "Cutie Pie",
+        "director/ddf-network/page/%d/" to "DDF Network",
+        "director/devils-film/page/%d/" to "Devils Film",
+        "director/digital-playground/page/%d/" to "Digital Playground",
+        "director/digital-sin/page/%d/" to "Digital Sin",
+        "director/doghouse-digital/page/%d/" to "Doghouse Digital",
+        "director/dorcel-english/page/%d/" to "Dorcel English",
+        "director/elegant-angel/page/%d/" to "Elegant Angel",
+        "director/erotic-planet/page/%d/" to "Erotic Planet",
+        "director/fantasy-massage/page/%d/" to "Fantasy Massage",
+        "director/filthy-kings-clips/page/%d/" to "Filthy Kings Clips",
+        "director/house-of-fyre/page/%d/" to "House Of Fyre",
+        "director/indian-x/page/%d/" to "Indian X",
+        "director/jules-jordan-video/page/%d/" to "Jules Jordan Video",
+        "director/mario-salieri-productions/page/%d/" to "Mario Salieri Productions",
+        "director/mariskax-productions/page/%d/" to "Mariskax Productions",
+        "director/mile-high-xtreme/page/%d/" to "Mile High Xtreme",
+        "director/my-pervy-family/page/%d/" to "My Pervy Family",
+        "director/naughty-america/page/%d/" to "Naughty America",
+        "director/new-sensations/page/%d/" to "New Sensations",
+        "director/penthouse/page/%d/" to "Penthouse",
+        "director/pornfidelity/page/%d/" to "Pornfidelity",
+        "director/private/page/%d/" to "Private",
+        "director/pure-taboo/page/%d/" to "Pure Taboo",
+        "director/reality-junkies/page/%d/" to "Reality Junkies",
+        "director/reality-kings/page/%d/" to "Reality Kings",
+        "director/sexmex/page/%d/" to "Sexmex",
+        "director/sinful-xxx/page/%d/" to "Sinful XXX",
+        "director/sinner-xxx/page/%d/" to "Sinner XXX",
+        "director/sweet-sinner/page/%d/" to "Sweet Sinner",
+        "director/taboo-heat/page/%d/" to "Taboo Heat",
+        "director/team-skeet/page/%d/" to "Team Skeet",
+        "director/wicked-pictures/page/%d/" to "Wicked Pictures",
+        "director/will-tile-xxx/page/%d/" to "Will Tile XXX",
+        "director/xprime/page/%d/" to "Xprime"
     )
 
     private suspend fun doc(url: String) =
         app.get(url, referer = "$mainUrl/", headers = mapOf("User-Agent" to ua), interceptor = cf).document
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val items = doc("$mainUrl/${request.data.format(page)}")
+        val url = "$mainUrl/${request.data.format(page)}"
+        val items = doc(url)
             .select("article.card").mapNotNull { it.toSearchResult() }.distinctBy { it.url }
         return newHomePageResponse(request.name, items, hasNext = items.isNotEmpty())
     }
