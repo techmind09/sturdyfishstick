@@ -23,6 +23,7 @@ import kotlinx.coroutines.delay
 import org.jsoup.nodes.Element
 
 class Perverzija : MainAPI() {
+class Xtremestream : MainAPI() {
     override var name = "Perverzija"
     override var mainUrl = "https://tube.perverzija.com"
     override val supportedTypes = setOf(TvType.NSFW)
