@@ -20,6 +20,7 @@ class DesimaalProvider : MainAPI() {
     override val mainPage = mainPageOf(
         "" to "Latest",
         "trending" to "Trending",
+        // OTT Platforms
         "ullu" to "Ullu",
         "wow" to "WoW",
         "moodx" to "MoodX",
@@ -37,7 +38,39 @@ class DesimaalProvider : MainAPI() {
         "hulchul" to "Hulchul",
         "bigshots" to "BigShots",
         "kooku" to "Kooku",
-        "hunters" to "Hunters"
+        "hunters" to "Hunters",
+        // Popular Series Franchises
+        "pehredaar" to "Pehredaar",
+        "bekaaboo" to "Bekaaboo",
+        "desi kisse" to "Desi Kisse",
+        "paglet" to "Paglet",
+        "jane anjane mein" to "Jane Anjane Mein",
+        "gaon ki garmi" to "Gaon Ki Garmi",
+        "tadap" to "Tadap",
+        "dunali" to "Dunali",
+        "imli" to "Imli",
+        "sainyaa salman" to "Sainyaa Salman",
+        "namkeen" to "Namkeen",
+        "kavita bhabhi" to "Kavita Bhabhi",
+        "riti riwaj" to "Riti Riwaj",
+        "halala" to "Halala",
+        "kasak" to "Kasak",
+        "size matters" to "Size Matters",
+        "doodh wali" to "Doodh Wali",
+        "rajneeti" to "Rajneeti",
+        "call center" to "Call Center",
+        "madhushala" to "Madhushala",
+        "shiddat mohabb" to "Shiddat Mohabb",
+        "favorite teacher" to "Favorite Teacher",
+        "chawl house" to "Chawl House",
+        "kirdaar" to "Kirdaar",
+        "kaneez" to "Kaneez",
+        "walkman" to "Walkman",
+        "mona home deli" to "Mona Home Deli",
+        "julie" to "Julie",
+        "atm bhabhi" to "ATM Bhabhi",
+        "khul ja sim sim" to "Khul Ja Sim Sim",
+        "charmsukh" to "Charmsukh"
     )
 
     private val apiUrl = "https://api.desimaal.live/api"
@@ -106,7 +139,10 @@ class DesimaalProvider : MainAPI() {
         val path = when (request.data) {
             "trending" -> "/videos?random=true&limit=30"
             "" -> "/videos?page=$page&limit=30"
-            else -> "/videos?ott=${request.data}&page=$page&limit=30"
+            "ullu", "wow", "moodx", "primeplay", "rabbit", "atrangii", "jugnu", "primeshots", "voovi", "hitprime", "digimovieplex", "bull", "cineprime", "altt", "hulchul", "bigshots", "kooku", "hunters" ->
+                "/videos?ott=${request.data}&page=$page&limit=30"
+            else ->
+                "/videos?series=${URLEncoder.encode(request.name, "UTF-8")}&page=$page&limit=30"
         }
         val json = api(path) ?: return newHomePageResponse(request.name, emptyList(), false)
         val items = json.optJSONArray("data").toItems()
