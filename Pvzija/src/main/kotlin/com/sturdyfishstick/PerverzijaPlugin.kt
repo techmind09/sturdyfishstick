@@ -8,7 +8,7 @@ import com.lagradost.cloudstream3.plugins.Plugin
 class PerverzijaPlugin : Plugin() {
     override fun load(context: Context) {
         // All providers should be added in this manner. Please don't edit the providers list directly.
-        registerMainAPI(Perverzija())
+        registerMainAPI(Xtremestream())
         registerExtractorAPI(Xtremestream())
         registerExtractorAPI(PerverZijaExtractor())
     }
