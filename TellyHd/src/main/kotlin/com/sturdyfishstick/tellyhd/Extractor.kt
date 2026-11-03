@@ -2,126 +2,13 @@ package com.sturdyfishstick.tellyhd
 
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.extractors.LuluStream
-import com.lagradost.cloudstream3.extractors.VidhideExtractor
 import com.lagradost.cloudstream3.utils.ExtractorApi
+import com.lagradost.cloudstream3.extractors.VidhideExtractor
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.ExtractorLinkType
+import com.lagradost.cloudstream3.utils.getQualityFromName
 import com.lagradost.cloudstream3.utils.INFER_TYPE
 import com.lagradost.cloudstream3.utils.Qualities
-import com.lagradost.cloudstream3.utils.getQualityFromName
 import com.lagradost.cloudstream3.utils.newExtractorLink
-
-class TellyXin : ExtractorApi() {
-    override var mainUrl = "https://telly.xin"
-    override var name = "Ultra Stream"
-    override val requiresReferer = false
-
-    override suspend fun getUrl(url: String, referer: String?): List<ExtractorLink>? {
-        val doc = app.get(url, referer = referer).document
-        
-        val script = doc.select("script").html()
-        var videoUrl = Regex("https?://[^\\s\"']+\\.(m3u8|mp4)").find(script)?.value 
-            ?: doc.select("source").attr("src")
-            ?: doc.select("iframe").attr("src")
-
-        if (videoUrl.isEmpty()) {
-            val evalScript = doc.select("script").let { scripts ->
-                scripts.find { it.data().contains("eval") }?.data()
-            }
-            if (evalScript != null) {
-                videoUrl = Regex("https?://[^\\s\"']+\\.(m3u8|mp4)").find(evalScript)?.value ?: ""
-            }
-        }
-
-        if (videoUrl.isEmpty()) return null
-
-        val fixedUrl = if (videoUrl.startsWith("//")) "https:$videoUrl" else videoUrl
-
-        return listOf(
-            newExtractorLink(
-                source = this.name,
-                name = this.name,
-                url = fixedUrl,
-                INFER_TYPE
-            ) {
-                this.referer = mainUrl
-                this.quality = Qualities.P1080.value
-            }
-        )
-    }
-}
-
-class FastDL : ExtractorApi() {
-    override val name: String = "FastDL"
-    override val mainUrl: String = "https://fastdl.beer"
-    override val requiresReferer = false
-
-    override suspend fun getUrl(
-        url: String,
-        referer: String?,
-        subtitleCallback: (com.lagradost.cloudstream3.SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ) {
-        if (url.contains("link=")) {
-            val direct = url.substringAfter("link=").substringBefore("&")
-            if (direct.startsWith("http")) {
-                callback.invoke(
-                    newExtractorLink(name, name, direct, ExtractorLinkType.VIDEO) {
-                        this.quality = Qualities.Unknown.value
-                    }
-                )
-                return
-            }
-        }
-    }
-}
-
-class VCloud : ExtractorApi() {
-    override val name: String = "FSL Server"
-    override val mainUrl: String = "https://vcloud.beer"
-    override val requiresReferer = false
-
-    override suspend fun getUrl(
-        url: String,
-        referer: String?,
-        subtitleCallback: (com.lagradost.cloudstream3.SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ) {
-        var href = url
-        if (href.contains("api/index.php")) {
-            href = runCatching {
-                app.get(url).document.selectFirst("div.main h4 a")?.attr("href")
-            }.getOrNull() ?: href
-        }
-
-        val doc = runCatching { app.get(href, referer = referer).document }.getOrNull() ?: return
-        val div = doc.selectFirst("div.card-body") ?: return
-
-        div.select("a[href]").forEach { el ->
-            val link = el.attr("href")
-            val text = el.text()
-            if (!link.startsWith("http")) return@forEach
-
-            when {
-                text.contains("FSL", ignoreCase = true) || text.contains("FastServer", ignoreCase = true) -> {
-                    callback.invoke(
-                        newExtractorLink("FSL Server", "FSL Server", link, ExtractorLinkType.VIDEO) {
-                            this.quality = Qualities.P1080.value
-                        }
-                    )
-                }
-                link.contains("pixeldrain.com") -> {
-                    val id = link.substringAfterLast("/").substringBefore("?")
-                    callback.invoke(
-                        newExtractorLink("PixelDrain", "PixelDrain", "https://pixeldrain.com/api/file/$id?download", ExtractorLinkType.VIDEO) {
-                            this.quality = Qualities.P1080.value
-                        }
-                    )
-                }
-            }
-        }
-    }
-}
 
 class Vidsp : VidhideExtractor() {
     override var mainUrl = "https://vidsp.lol"
@@ -130,59 +17,52 @@ class Vidsp : VidhideExtractor() {
 class VidHideplus : VidhideExtractor() {
     override var mainUrl = "https://vidhideplus.com"
 }
-
-class VidHidedht : VidhideExtractor() {
+class VidHidedht: VidhideExtractor() {
     override var mainUrl = "https://dhtpre.com"
 }
 
 class Vidhidehub : VidhideExtractor() {
     override var mainUrl = "https://vidhidehub.com"
 }
-
 class Vidhidetoul : VidhideExtractor() {
     override var mainUrl = "https://toul.hair"
 }
-
 class Xtapes : VidhideExtractor() {
     override var mainUrl = "https://xtapes.porn"
     override var name = "Xtapes"
 }
 
+
 class Luluvid : LuluStream() {
     override val name = "Lulustream"
-    override val mainUrl = "https://lulustream.com"
-}
-
-class Ultrastream : VidhideExtractor() {
-    override var mainUrl = "https://ultrastream.audio"
-    override var name = "Ultra Stream"
+    override val mainUrl = "https://luluvid.com"
 }
 
 open class Ds2play : ExtractorApi() {
     override var name = "DoodStream"
-    override var mainUrl = "https://dood.wf"
+    override var mainUrl = "https://ds2play.com"
     override val requiresReferer = false
 
+    override fun getExtractorUrl(id: String): String {
+        return "https://dood.wf/d/$id"
+    }
+
     override suspend fun getUrl(url: String, referer: String?): List<ExtractorLink>? {
-        val response0 = app.get(url, referer = referer).text
-        val md5Regex = Regex("/pass_md5/[^'\"<>]+").find(response0)?.value ?: return null
-        val md5Url = if (md5Regex.startsWith("http")) md5Regex else "https://dood.wf" + md5Regex
-        
-        val md5Response = app.get(md5Url, referer = url).text
-        val trueUrl = md5Response + "zUEJeL3mUN?token=" + md5Url.substringAfterLast("/")
-        
+        val response0 = app.get(url).text // html of DoodStream page to look for /pass_md5/...
+        val md5 =mainUrl+(Regex("/pass_md5/[^']*").find(response0)?.value ?: return null)  // get https://dood.ws/pass_md5/...
+        val trueUrl = app.get(md5, referer = url).text + "zUEJeL3mUN?token=" + md5.substringAfterLast("/")   //direct link to extract  (zUEJeL3mUN is random)
         val quality = Regex("\\d{3,4}p").find(response0.substringAfter("<title>").substringBefore("</title>"))?.groupValues?.get(0)
-        
         return listOf(
             newExtractorLink(
                 source = this.name,
                 name = this.name,
                 url = trueUrl
             ) {
-                this.referer = "https://dood.wf"
+                this.referer = mainUrl
                 this.quality = getQualityFromName(quality)
             }
-        )
+        ) // links are valid in 8h
+
     }
 }
 
@@ -195,20 +75,20 @@ open class Bigwarp : ExtractorApi() {
         url: String,
         referer: String?,
     ): List<ExtractorLink>? {
-        val response = app.get(url).document
+        val response =app.get(url).document
         val script = response.selectFirst("script:containsData(sources)")?.data().toString()
-        Regex("sources:\\s*\\[\\s*\\{\\s*file:\\s*\"(.*?)\"").find(script)?.groupValues?.get(1)?.let { link ->
-            return listOf(
-                newExtractorLink(
-                    source = name,
-                    name = name,
-                    url = link,
-                    INFER_TYPE
-                ) {
-                    this.referer = referer ?: "$mainUrl/"
-                    this.quality = Qualities.P1080.value
-                }
-            )
+        Regex("sources:\\s*\\[.file:\"(.*)\".*").find(script)?.groupValues?.get(1)?.let { link ->
+                return listOf(
+                    newExtractorLink(
+                        source = name,
+                        name = name,
+                        url = link,
+                        INFER_TYPE
+                    ) {
+                        this.referer = referer ?: "$mainUrl/"
+                        this.quality = Qualities.P1080.value
+                    }
+                )
         }
         return null
     }
