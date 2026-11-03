@@ -1,4 +1,4 @@
-package com.sturdyfishstick
+package com.sturdyfishstick.pvzija
 
 import com.lagradost.api.Log
 import com.lagradost.cloudstream3.*
@@ -21,7 +21,6 @@ open class PerverZijaExtractor : ExtractorApi() {
     ) {
         Log.d("kraptor_PerverZijaExtract", "url = $url")
 
-        // Determine if it uses the newer xtremestream script style or fallback loop
         try {
             val html = app.get(url, referer = referer).text
             val playerScript = Jsoup.parse(html)
@@ -59,13 +58,10 @@ open class PerverZijaExtractor : ExtractorApi() {
             Log.d("kraptor_PerverZijaExtract", "Script parse failed, fallback to loop: ${e.message}")
         }
 
-        // Fallback / standard server generation method
         val liste = listOf("480", "720", "1080", "2160")
         liste.forEach { kalite ->
             val videoQuality = kalite.toIntOrNull() ?: 720
             val changeUrl = url.replace("index.php", "xs1.php") + "&q=$videoQuality"
-
-            Log.d("kraptor_PerverZijaExtract", "changeUrl = $changeUrl")
 
             callback.invoke(
                 newExtractorLink(
@@ -82,8 +78,7 @@ open class PerverZijaExtractor : ExtractorApi() {
     }
 }
 
-// Separate or secondary Extractor class for Xtremestream if you prefer it modular
-open class Xtremestream : ExtractorApi() {
+open class XtremestreamExtractor : ExtractorApi() {
     override var name = "Xtremestream"
     override var mainUrl = "https://pervl4.xtremestream.xyz"
     override val requiresReferer = true
