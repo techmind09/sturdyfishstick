@@ -18,12 +18,9 @@ import com.lagradost.cloudstream3.SearchResponseList
 import com.lagradost.cloudstream3.newSearchResponseList
 import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.loadExtractor
-import kotlinx.coroutines.delay
 import org.jsoup.nodes.Element
 
 class Perverzija : MainAPI() {
-class Xtremestream : MainAPI() {
     override var name = "Perverzija"
     override var mainUrl = "https://tube.perverzija.com"
     override val supportedTypes = setOf(TvType.NSFW)
@@ -71,7 +68,6 @@ class Xtremestream : MainAPI() {
         return newMovieSearchResponse(title, href, TvType.NSFW) {
             this.posterUrl = posterUrl
         }
-
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
@@ -82,12 +78,11 @@ class Xtremestream : MainAPI() {
         return newMovieSearchResponse(title, href, TvType.NSFW) {
             this.posterUrl = posterUrl
         }
-
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList? {
         val url = if (query.contains(" ")) {
-        "$mainUrl/page/$page/?s=${query.replace(" ", "+")}&orderby=date"
+            "$mainUrl/page/$page/?s=${query.replace(" ", "+")}&orderby=date"
         } else {
             "$mainUrl/tag/$query/page/$page/"
         }
@@ -95,9 +90,9 @@ class Xtremestream : MainAPI() {
         val results = app.get(url, interceptor = cfInterceptor).document
             .select("div.row div div.post").mapNotNull {
                 it.toSearchResult()
-        }.distinctBy { it.url }
+            }.distinctBy { it.url }
 
-        val hasNext = if (results.isEmpty()) false else true
+        val hasNext = results.isNotEmpty()
         return newSearchResponseList(results, hasNext)
     }
 
@@ -139,8 +134,27 @@ class Xtremestream : MainAPI() {
 
         val iframeUrl = document.select("div#player-embed iframe").attr("src")
 
-        Xtremestream().getUrl(iframeUrl, data, subtitleCallback, callback)
+        // Call appropriate extractor based on iframe URL or use XtremestreamExtractor
+        XtremestreamExtractor().getUrl(iframeUrl, data, subtitleCallback, callback)
 
+        return true
+    }
+}
+
+// Agar Xtremestream ek alag MainAPI hai toh ise use karein, nahi toh hata sakte hain
+class XtremestreamMain : MainAPI() {
+    override var name = "Xtremestream"
+    override var mainUrl = "https://tube.perverzija.com"
+    override val supportedTypes = setOf(TvType.NSFW)
+    override val hasMainPage = false
+
+    override suspend fun loadLinks(
+        data: String,
+        isCasting: Boolean,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        XtremestreamExtractor().getUrl(data, null, subtitleCallback, callback)
         return true
     }
 }
