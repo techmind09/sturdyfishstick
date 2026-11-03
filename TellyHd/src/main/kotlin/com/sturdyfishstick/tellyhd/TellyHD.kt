@@ -197,9 +197,11 @@ class TellyHD : MainAPI() {
         val nume: String? = null,
     )
 
-    data class ResponseHash(
+        data class ResponseHash(
         @JsonProperty("embed_url")
-        val embedUrl: String,
-        val type: String,
+        val embedUrl: String? = null,
+        val type: String? = null
+    )
+
     )
 }
