@@ -152,7 +152,7 @@ class TellyHD : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val loadData = tryParseJson<LinkData>(data)
-        val iframe = app.post(
+        val response = app.post(
             url = "$mainUrl/wp-admin/admin-ajax.php", 
             data = mapOf(
                 "action" to "doo_player_ajax", 
@@ -165,9 +165,11 @@ class TellyHD : MainAPI() {
                 "Accept" to "*/*", 
                 "X-Requested-With" to "XMLHttpRequest"
             )
-        ).parsed<ResponseHash>().embedUrl.getIframe()
+        ).parsedSafe<ResponseHash>()
 
-        if (!iframe.contains("youtube")) {
+        val iframe = response?.embedUrl?.getIframe() ?: return false
+
+        if (!iframe.contains("youtube") && iframe.isNotEmpty()) {
             loadExtractor(
                 iframe,
                 "$mainUrl/",
@@ -197,11 +199,9 @@ class TellyHD : MainAPI() {
         val nume: String? = null,
     )
 
-        data class ResponseHash(
+    data class ResponseHash(
         @JsonProperty("embed_url")
         val embedUrl: String? = null,
-        val type: String? = null
-    )
-
+        val type: String? = null,
     )
 }
