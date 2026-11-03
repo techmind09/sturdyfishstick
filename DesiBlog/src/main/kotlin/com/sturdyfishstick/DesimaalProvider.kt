@@ -106,7 +106,7 @@ class DesimaalProvider : MainAPI() {
         val path = when (request.data) {
             "trending" -> "/videos?random=true&limit=30"
             "" -> "/videos?page=$page&limit=30"
-            else -> "/videos?series=${URLEncoder.encode(request.name, "UTF-8")}&page=$page&limit=30"
+            else -> "/videos?ott=${request.data}&page=$page&limit=30"
         }
         val json = api(path) ?: return newHomePageResponse(request.name, emptyList(), false)
         val items = json.optJSONArray("data").toItems()
@@ -129,13 +129,17 @@ class DesimaalProvider : MainAPI() {
         if (this == null) return out
         for (i in 0 until length()) {
             val o = optJSONObject(i) ?: continue
-            val id = o.optString("_id", "")
-            val title = o.optString("title", "")
+            val id = o.optString("_id", "").ifBlank { o.optString("id", "") }
+            val title = o.optString("title", "").ifBlank { o.optString("name", "") }
             if (id.isBlank() || title.isBlank()) continue
+
+            val poster = o.optString("thumbnail").ifBlank {
+                o.optString("poster").ifBlank { o.optString("image") }
+            }
 
             out.add(
                 newMovieSearchResponse(title, "$mainUrl/video/$id", TvType.NSFW) {
-                    this.posterUrl = o.optString("thumbnail").ifBlank { null }
+                    this.posterUrl = poster.ifBlank { null }
                 }
             )
         }
@@ -156,6 +160,10 @@ class DesimaalProvider : MainAPI() {
         val duration = o.optString("duration", "")
         val plays = o.optInt("play_count", 0)
 
+        val poster = o.optString("thumbnail").ifBlank {
+            o.optString("poster").ifBlank { o.optString("image") }
+        }
+
         val plot = buildString {
             if (series.isNotBlank()) appendLine("Series: $series")
             if (models.isNotEmpty()) appendLine("Cast: ${models.joinToString(", ")}")
@@ -164,7 +172,7 @@ class DesimaalProvider : MainAPI() {
         }.trim().ifBlank { null }
 
         return newMovieLoadResponse(title, url, TvType.NSFW, id) {
-            this.posterUrl = o.optString("thumbnail").ifBlank { null }
+            this.posterUrl = poster.ifBlank { null }
             this.plot = plot
             this.tags = (tags + models).distinct().take(20)
             this.year = o.optString("uploadDate").take(4).toIntOrNull()
