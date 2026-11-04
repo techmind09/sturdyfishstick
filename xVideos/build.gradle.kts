@@ -2,13 +2,13 @@ version = 2
 
 cloudstream {
 
-    language = "hi"
+    language = "en"
     authors = listOf("sturdyfishstick")
-    description = "xVideos.com is a free hosting service for porn videos."
+    description = "Multiple Languages is a free hosting service for porn videos."
     status = 1
 
     tvTypes = listOf(
-        "NSFW"
+        "Movies"
     )
     iconUrl = "https://www.google.com/s2/favicons?domain=https://www.xvideos.com&sz=128"
 
