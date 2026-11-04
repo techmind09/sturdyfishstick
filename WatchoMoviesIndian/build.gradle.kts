@@ -17,9 +17,9 @@ cloudstream {
     // You can find a list of available types here:
     // https://recloudstream.github.io/cloudstream/html/app/com.lagradost.cloudstream3/-tv-type/index.html
     tvTypes = listOf(
-        "NSFW"
+        "Movies"
     )
-    language = "en"
+    language = "hi"
 
     iconUrl = "https://watchomovies.study/"
 }
