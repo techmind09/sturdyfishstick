@@ -41,12 +41,10 @@ class TellyHDEn : MainAPI() {
     )
 
     override val mainPage = mainPageOf(
-        "release/${Calendar.getInstance().get(Calendar.YEAR)}" to "Latest",
         "genre/adventure" to "Adventure",
         "genre/attackers" to "Attackers",
         "genre/brazzers" to "Brazzers",
         "genre/chinese" to "Chinese",
-        "genre/altbalaji" to "Alt Balaji",
         "genre/deeper" to "Deeper",
         "genre/digital-playground" to "Digital Playground",
         "genre/documentary" to "Documentary", 
