@@ -99,7 +99,7 @@ class TellyHDEn : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val url = if (page <= 1) "$mainUrl/${request.data}/" else "$mainUrl/${request.data}/page/$page/"
-        val document = app.get(url, headers = headers).document
+        val document = app.get(url, headers = headers, timeout = 15L).document
 
         val home = document.select("div.items.normal article, div#archive-content article, div.items.full article").mapNotNull {
             it.toSearchResult()
@@ -136,7 +136,7 @@ class TellyHDEn : MainAPI() {
         val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8").replace("+", "%20")
         val url = if (page <= 1) "$mainUrl/search/$encodedQuery/" else "$mainUrl/search/$encodedQuery/page/$page/"
 
-        val document = app.get(url, headers = headers).document
+        val document = app.get(url, headers = headers, timeout = 15L).document
 
         val results = document.select("div.result-item").mapNotNull { element ->
             val anchor = element.selectFirst("div.title > a") ?: return@mapNotNull null
@@ -163,7 +163,7 @@ class TellyHDEn : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val document = app.get(url, headers = headers).document
+        val document = app.get(url, headers = headers, timeout = 15L).document
 
         val title = document.selectFirst("div.data > h1")?.text()?.trim()?.takeIf { it.isNotBlank() } ?: return null
 
@@ -233,16 +233,34 @@ class TellyHDEn : MainAPI() {
 
         val apiUrl = "$mainUrl/wp-json/dooplayer/v2/$post/$type/$nume"
 
-        val response = app.get(
-            url = apiUrl,
-            referer = mainUrl,
-            headers = headers + mapOf("X-Requested-With" to "XMLHttpRequest")
-        ).parsedSafe<ResponseHash>()
+        // 1. Try fetching via Dooplayer JSON API with error handling & timeout
+        val response = runCatching {
+            app.get(
+                url = apiUrl,
+                referer = mainUrl,
+                headers = headers + mapOf("X-Requested-With" to "XMLHttpRequest"),
+                timeout = 10L
+            ).parsedSafe<ResponseHash>()
+        }.getOrNull()
 
-        val iframe = response?.embedUrl?.getIframe() ?: return false
+        var iframe = response?.embedUrl?.getIframe()
+
+        // 2. Fallback: If JSON API fails, scrape embed URL directly from post page
+        if (iframe.isNullOrBlank()) {
+            val fallbackDoc = runCatching {
+                app.get("$mainUrl/?p=$post", headers = headers, timeout = 10L).document
+            }.getOrNull()
+            
+            iframe = fallbackDoc?.select("iframe")?.attr("src")?.let { resolveUrl(mainUrl, it) }
+        }
+
+        if (iframe.isNullOrBlank()) return false
 
         if (iframe.contains("telly", ignoreCase = true)) {
-            val playerDoc = app.get(url = iframe, referer = mainUrl, headers = headers).document
+            val playerDoc = runCatching {
+                app.get(url = iframe, referer = mainUrl, headers = headers, timeout = 10L).document
+            }.getOrNull() ?: return false
+
             val rawStreamUrl = playerDoc.selectFirst("script#player-loader")?.attr("data-stream-url")?.takeIf { it.isNotBlank() } ?: return false
             val streamUrl = resolveUrl(iframe, rawStreamUrl)
 
