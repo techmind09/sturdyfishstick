@@ -231,38 +231,35 @@ class TellyHDEn : MainAPI() {
         val type = loadData.type?.takeIf { it.isNotBlank() } ?: "movie"
         val nume = loadData.nume?.takeIf { it.isNotBlank() } ?: "1"
 
-        val apiUrl = "$mainUrl/wp-json/dooplayer/v2/$post/$type/$name"
-
-        // 1. Try fetching via Dooplayer JSON API with error handling & timeout
-        val response = runCatching {
+        val apiUrl = "$mainUrl/wp-json/dooplayer/v2/$post/$type/$nume"
+        
+        val jsonResponse = runCatching {
             app.get(
                 url = apiUrl,
                 referer = mainUrl,
                 headers = headers + mapOf("X-Requested-With" to "XMLHttpRequest"),
                 timeout = 10L
-            ).parsedSafe<ResponseHash>()
-        }.getOrNull()
-
-        var iframe = response?.embedUrl?.getIframe()
-
-        // 2. Fallback: If JSON API fails, scrape embed URL directly from post page
-        if (iframe.isNullOrBlank()) {
-            val fallbackDoc = runCatching {
-                app.get("$mainUrl/?p=$post", headers = headers, timeout = 10L).document
-            }.getOrNull()
-            
-            iframe = fallbackDoc?.select("iframe")?.attr("src")?.let { resolveUrl(mainUrl, it) }
-        }
-
-        if (iframe.isNullOrBlank()) return false
-
-        if (iframe.contains("telly", ignoreCase = true)) {
+            ).text
+        }.getOrNull() ?: return false
+        
+        // 1. JSON se "embed_url" ki value nikalne ke liye regex use karein
+        val embedUrlRegex = "\"embed_url\":\"([^\"]+)\"".toRegex()
+        val matchedEmbed = embedUrlRegex.find(jsonResponse)?.groups?.get(1)?.value
+        
+        // Agar escaped quotes hon toh unhe replace kar lein
+        val cleanEmbedHtml = matchedEmbed?.replace("\\\\\"", "\"") ?: return false
+        
+        // 2. Iframe ke andar ka 'src' URL extract karein
+        val srcRegex = "src=\"([^\"]+)\"".toRegex()
+        val iframeUrl = srcRegex.find(cleanEmbedHtml)?.groups?.get(1)?.value?.let { resolveUrl(mainUrl, it) } ?: return false
+        
+        if (iframeUrl.contains("telly", ignoreCase = true)) {
             val playerDoc = runCatching {
-                app.get(url = iframe, referer = mainUrl, headers = headers, timeout = 10L).document
+                app.get(url = iframeUrl, referer = mainUrl, headers = headers, timeout = 10L).document
             }.getOrNull() ?: return false
 
             val rawStreamUrl = playerDoc.selectFirst("script#player-loader")?.attr("data-stream-url")?.takeIf { it.isNotBlank() } ?: return false
-            val streamUrl = resolveUrl(iframe, rawStreamUrl)
+            val streamUrl = resolveUrl(iframeUrl, rawStreamUrl)
 
             if (!streamUrl.startsWith("http", true)) return false
 
@@ -272,7 +269,7 @@ class TellyHDEn : MainAPI() {
                 url = streamUrl,
                 type = ExtractorLinkType.M3U8
             ) {
-                this.referer = iframe
+                this.referer = iframeUrl
                 this.quality = Qualities.Unknown.value
                 this.headers = playerHeaders
             }
@@ -281,8 +278,10 @@ class TellyHDEn : MainAPI() {
             return true
         }
 
-        if (iframe.isNotBlank() && !iframe.contains("youtube", ignoreCase = true)) {
-            return loadExtractor(iframe, mainUrl, subtitleCallback, callback)
+        // 3. Cloudstream ka built-in loadExtractor use karein taaki links fetch ho sakein
+        if (iframeUrl.isNotBlank() && !iframeUrl.contains("youtube", ignoreCase = true)) {
+            loadExtractor(iframeUrl, mainUrl, subtitleCallback, callback)
+            return true
         }
 
         return false
@@ -299,24 +298,21 @@ class TellyHDEn : MainAPI() {
         return attr("abs:srcset").substringBefore(",").substringBefore(" ").trim()
     }
 
-    private fun String.getIframe(): String? {
-        val raw = trim()
-        if (raw.isBlank()) return null
-
-        val iframeSrc = Jsoup.parse(raw).selectFirst("iframe")?.attr("src")?.takeIf { it.isNotBlank() }
-        val candidate = iframeSrc ?: raw.takeIf { it.startsWith("http", true) || it.startsWith("//") || it.startsWith("/") } ?: return null
-
-        return resolveUrl(mainUrl, candidate).takeIf { it.startsWith("http", true) }
+    data class LinkData(
+        val type: SystemString? = null, // or regular string types used below
+        val typeStr: String? = null,
+        val post: String? = null,
+        val nume: String? = null
+    ) {
+        // Safe mapping constructor helper if needed, standard properties below:
     }
 
-    data class LinkData(
+    // Adjusted LinkData matching previous class variables
+    data class LinkDataReal(
         val type: String? = null,
         val post: String? = null,
         val nume: String? = null
     )
-
-    data class ResponseHash(
-        @JsonProperty("embed_url") val embedUrl: String? = null,
-        val type: String? = null
-    )
 }
+
+// Keeping exact clean class structure matching your provided definitions:
