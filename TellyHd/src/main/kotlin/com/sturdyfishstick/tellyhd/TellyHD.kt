@@ -256,7 +256,7 @@ class TellyHD : MainAPI() {
         val type = loadData.type?.takeIf { it.isNotBlank() } ?: "movie"
         val nume = loadData.nume?.takeIf { it.isNotBlank() } ?: "1"
 
-        val apiUrl = "$mainUrl/wp-json/dooplayer/v2/$post/$type/$name"
+        val apiUrl = "$mainUrl/wp-json/dooplayer/v2/$post/$type/$nume"
 
         val response = app.get(
             url = apiUrl,
