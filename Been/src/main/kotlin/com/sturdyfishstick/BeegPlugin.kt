@@ -1,0 +1,11 @@
+package com.sturdyfishstick
+
+import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
+import com.lagradost.cloudstream3.plugins.Plugin
+
+@CloudstreamPlugin
+class BeegPlugin: Plugin() {
+    override fun load() {
+        registerMainAPI(Beeg())
+    }
+}
