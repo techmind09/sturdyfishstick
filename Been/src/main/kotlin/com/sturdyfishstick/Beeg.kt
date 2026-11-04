@@ -11,7 +11,7 @@ import com.lagradost.cloudstream3.utils.*
 import java.util.Locale
 
 class Beeg : MainAPI() {
-    override var mainUrl = "https://beeg.porn"
+    override var mainUrl = "https://beeg.com"
     override var name = "Beeg"
     override val hasMainPage = true
     override var lang = "en"
@@ -25,23 +25,14 @@ class Beeg : MainAPI() {
 
     private val headerlar = mapOf(
         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:157.0) Gecko/20100101 Firefox/157.0",
-        "Origin" to "https://beeg.porn",
-        "Referer" to "https://beeg.porn/",
+        "Origin" to "https://beeg.com",
+        "Referer" to "https://beeg.com/",
         "Accept" to "application/json, text/plain, */*",
         "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
     )
 
     private val categories = listOf(
-        "indian" to "Indian",
-        "familial-relations" to "Familial Relations",
-        "blowjob" to "Blowjob",
-        "perfect-ass" to "Perfect Ass",
-        "fucking" to "Fucking",
-        "ass" to "Ass",
-        "black-woman" to "Black Woman",
-        "pussy" to "Pussy",
-        "doggystyle" to "Doggystyle",
-        "bbw" to "BBW",
+        "index" to "Main Page",
         "WowGirls" to "Wow Girls",
         "BrattySis" to "Bratty Sis",
         "NubilesPorn" to "Nubiles Porn",
@@ -78,6 +69,7 @@ class Beeg : MainAPI() {
         "Lesbian" to "Lesbian",
         "POV" to "POV",
         "Creampie" to "Creampie",
+        "Blowjob" to "Blowjob",
         "Hardcore" to "Hardcore",
         "Squirting" to "Squirting",
         "Russian" to "Russian",
@@ -95,6 +87,7 @@ class Beeg : MainAPI() {
         "Masturbation" to "Masturbation",
         "Cuckold" to "Cuckold",
         "Lingerie" to "Lingerie",
+        "Indian" to "Indian",
         "NaturalTits" to "NaturalTits",
         "Redhead" to "Redhead",
         "Solo" to "Solo",
@@ -259,7 +252,13 @@ class Beeg : MainAPI() {
             }.getOrNull()
             if (jsonRes.isNullOrBlank() || jsonRes == "[]") break
 
-            val videoList = runCatching { mapper.readValue<List>>(jsonRes) }.getOrNull().orEmpty()
+            val videoList = runCatching {
+                mapper.readValue<List>>(
+                    jsonRes,
+                    mapper.typeFactory.constructCollectionType(List::class.java, Map::class.java)
+                )
+            }.getOrNull().orEmpty()
+
             if (videoList.isEmpty()) break
 
             val pageEpisodes = videoList.mapNotNull { video ->
@@ -357,7 +356,7 @@ private data class ApiContent(
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 private data class ApiTag(
-    val id: Long? = null,
+    val id: Long? = longArrayOf().indices.firstOrNull()?.toLong() ?: 0L,
     @JsonProperty("is_person") val isPerson: Boolean? = false,
     @JsonProperty("tg_name") val tgName: String? = null,
     @JsonProperty("tg_slug") val tgSlug: String? = null,
