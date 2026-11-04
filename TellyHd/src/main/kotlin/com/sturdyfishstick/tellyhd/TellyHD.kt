@@ -45,7 +45,7 @@ class TellyHD : MainAPI() {
         "genre/18plus" to "18+",
         "genre/9redmovie" to "9redmovie",
         "genre/addatv" to "Addatv",
-        "genre/aahasflix" to "AahaFlix",
+        "genre/aahaflix" to "AahaFlix",
         "genre/altbalaji" to "Alt Balaji",
         "genre/atrangii" to "Atrangii",
         "genre/bindastimes" to "Bindastimes",
@@ -256,7 +256,7 @@ class TellyHD : MainAPI() {
         val type = loadData.type?.takeIf { it.isNotBlank() } ?: "movie"
         val nume = loadData.nume?.takeIf { it.isNotBlank() } ?: "1"
 
-        val apiUrl = "$mainUrl/wp-json/dooplayer/v2/$post/$type/$nume"
+        val apiUrl = "$mainUrl/wp-json/dooplayer/v2/$post/$type/$name"
 
         val response = app.get(
             url = apiUrl,
