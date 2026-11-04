@@ -239,16 +239,30 @@ class TellyHDEn : MainAPI() {
                 headers = headers + mapOf("X-Requested-With" to "XMLHttpRequest"),
                 timeout = 10L
             ).text
-        }.getOrNull() ?: return false
-        
-        val embedUrlRegex = "\"embed_url\":\"([^\"]+)\"".toRegex()
-        val matchedEmbed = embedUrlRegex.find(jsonResponse)?.groups?.get(1)?.value
-        
-        val cleanEmbedHtml = matchedEmbed?.replace("\\\\\"", "\"") ?: return false
-        
-        val srcRegex = "src=\"([^\"]+)\"".toRegex()
-        val iframeUrl = srcRegex.find(cleanEmbedHtml)?.groups?.get(1)?.value?.let { resolveUrl(mainUrl, it) } ?: return false
-        
+        }.getOrNull()
+
+        var iframeUrl: String? = null
+
+        if (!jsonResponse.isNullOrBlank()) {
+            val embedUrlRegex = "\"embed_url\":\"([^\"]+)\"".toRegex()
+            val matchedEmbed = embedUrlRegex.find(jsonResponse)?.groups?.get(1)?.value
+            val cleanEmbedHtml = matchedEmbed?.replace("\\\\\"", "\"")
+            
+            val srcRegex = "src=\"([^\"]+)\"".toRegex()
+            iframeUrl = cleanEmbedHtml?.let { srcRegex.find(it)?.groups?.get(1)?.value }?.let { resolveUrl(mainUrl, it) }
+        }
+
+        // Fallback: Agar Dooplayer API se link na mile toh direct post page se iframe uthayein
+        if (iframeUrl.isNullOrBlank()) {
+            val fallbackDoc = runCatching {
+                app.get("$mainUrl/?p=$post", headers = headers, timeout = 10L).document
+            }.getOrNull()
+            
+            iframeUrl = fallbackDoc?.select("iframe")?.attr("src")?.let { resolveUrl(mainUrl, it) }
+        }
+
+        if (iframeUrl.isNullOrBlank()) return false
+
         if (iframeUrl.contains("telly", ignoreCase = true)) {
             val playerDoc = runCatching {
                 app.get(url = iframeUrl, referer = mainUrl, headers = headers, timeout = 10L).document
