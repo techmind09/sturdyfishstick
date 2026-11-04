@@ -13,7 +13,6 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.net.URL
 import java.net.URLEncoder
-import java.util.Calendar
 
 class TellyHDEn : MainAPI() {
 
@@ -242,14 +241,11 @@ class TellyHDEn : MainAPI() {
             ).text
         }.getOrNull() ?: return false
         
-        // 1. JSON se "embed_url" ki value nikalne ke liye regex use karein
         val embedUrlRegex = "\"embed_url\":\"([^\"]+)\"".toRegex()
         val matchedEmbed = embedUrlRegex.find(jsonResponse)?.groups?.get(1)?.value
         
-        // Agar escaped quotes hon toh unhe replace kar lein
         val cleanEmbedHtml = matchedEmbed?.replace("\\\\\"", "\"") ?: return false
         
-        // 2. Iframe ke andar ka 'src' URL extract karein
         val srcRegex = "src=\"([^\"]+)\"".toRegex()
         val iframeUrl = srcRegex.find(cleanEmbedHtml)?.groups?.get(1)?.value?.let { resolveUrl(mainUrl, it) } ?: return false
         
@@ -258,9 +254,10 @@ class TellyHDEn : MainAPI() {
                 app.get(url = iframeUrl, referer = mainUrl, headers = headers, timeout = 10L).document
             }.getOrNull() ?: return false
 
-            val rawStreamUrl = playerDoc.selectFirst("script#player-loader")?.attr("data-stream-url")?.takeIf { it.isNotBlank() } ?: return false
+            val rawStreamUrl = playerDoc.selectFirst("script#player-loader")?.attr("data-stream-url")
+            if (rawStreamUrl.isNullOrBlank()) return false
+            
             val streamUrl = resolveUrl(iframeUrl, rawStreamUrl)
-
             if (!streamUrl.startsWith("http", true)) return false
 
             val link = newExtractorLink(
@@ -278,7 +275,6 @@ class TellyHDEn : MainAPI() {
             return true
         }
 
-        // 3. Cloudstream ka built-in loadExtractor use karein taaki links fetch ho sakein
         if (iframeUrl.isNotBlank() && !iframeUrl.contains("youtube", ignoreCase = true)) {
             loadExtractor(iframeUrl, mainUrl, subtitleCallback, callback)
             return true
@@ -299,20 +295,13 @@ class TellyHDEn : MainAPI() {
     }
 
     data class LinkData(
-        val type: SystemString? = null, // or regular string types used below
-        val typeStr: String? = null,
-        val post: String? = null,
-        val nume: String? = null
-    ) {
-        // Safe mapping constructor helper if needed, standard properties below:
-    }
-
-    // Adjusted LinkData matching previous class variables
-    data class LinkDataReal(
         val type: String? = null,
         val post: String? = null,
         val nume: String? = null
     )
-}
 
-// Keeping exact clean class structure matching your provided definitions:
+    data class ResponseHash(
+        @JsonProperty("embed_url") val embedUrl: String? = null,
+        val type: String? = null
+    )
+}
