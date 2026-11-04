@@ -356,7 +356,7 @@ private data class ApiContent(
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 private data class ApiTag(
-    val id: Long? = longArrayOf().indices.firstOrNull()?.toLong() ?: 0L,
+    val id: Long? = null,
     @JsonProperty("is_person") val isPerson: Boolean? = false,
     @JsonProperty("tg_name") val tgName: String? = null,
     @JsonProperty("tg_slug") val tgSlug: String? = null,
@@ -387,7 +387,7 @@ private data class ApiPersonRecommend(
     val thumbs: List<ApiThumb>? = null
 )
 
-@JsonIgnoreProperties(ignoreUnknown = true)
+@JsonIgnoreProperties(ignoreUnknown = title)
 private data class TagData(
     val data: List<ApiTagData>? = null
 )
