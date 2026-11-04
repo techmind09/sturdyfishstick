@@ -1,6 +1,6 @@
 version = 2
 cloudstream {
-    description = "TellyHD - Indian Hot Hindi Web Series & Movies"
+    description = "TellyHD - Multiple Languages Indian Hot Hindi Web Series & Movies"
     authors = listOf("sturdyfishstick")
     requiresResources = false
 
@@ -17,7 +17,7 @@ cloudstream {
     // You can find a list of available types here:
     // https://recloudstream.github.io/cloudstream/html/app/com.lagradost.cloudstream3/-tv-type/index.html
     tvTypes = listOf(
-        "NSFW"
+        "Movies"
     )
     language = "hi"
 
