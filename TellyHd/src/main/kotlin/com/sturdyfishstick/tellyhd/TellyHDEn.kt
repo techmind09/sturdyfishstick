@@ -231,7 +231,7 @@ class TellyHDEn : MainAPI() {
         val type = loadData.type?.takeIf { it.isNotBlank() } ?: "movie"
         val nume = loadData.nume?.takeIf { it.isNotBlank() } ?: "1"
 
-        val apiUrl = "$mainUrl/wp-json/dooplayer/v2/$post/$type/$nume"
+        val apiUrl = "$mainUrl/wp-json/dooplayer/v2/$post/$type/$name"
 
         // 1. Try fetching via Dooplayer JSON API with error handling & timeout
         val response = runCatching {
