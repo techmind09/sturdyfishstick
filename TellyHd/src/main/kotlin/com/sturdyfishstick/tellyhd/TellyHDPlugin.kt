@@ -25,6 +25,7 @@ class TellyHDPlugin : Plugin() {
         registerExtractorAPI(Vidhidetoul())
         registerExtractorAPI(Luluvid())
         registerExtractorAPI(Xtapes())
+        registerExtractorAPI(Filemoon()) // <-- Yeh naya add kiya gaya hai
     }
 
     companion object {
