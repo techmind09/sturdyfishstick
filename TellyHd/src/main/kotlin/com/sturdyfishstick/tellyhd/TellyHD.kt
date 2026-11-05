@@ -261,21 +261,33 @@ class TellyHD : MainAPI() {
             val type = loadData.type?.takeIf { it.isNotBlank() } ?: "movie"
             val nume = loadData.nume?.takeIf { it.isNotBlank() } ?: "1"
 
-            val apiUrl = "$mainUrl/wp-json/dooplayer/v2/$post/$type/$nume"
+            // Multi-Endpoint Fallback (v2 API, v1 API, aur Admin-Ajax fallback)
+            val apiUrls = listOf(
+                "$mainUrl/wp-json/dooplayer/v2/$post/$type/$nume",
+                "$mainUrl/wp-json/dooplayer/v1/$post/$type/$nume",
+                "$mainUrl/wp-admin/admin-ajax.php?action=doo_player_ajax&post=$post&type=$type&nume=$nume"
+            )
 
-            val response = withContext(Dispatchers.IO) {
-                try {
-                    app.get(
-                        url = apiUrl,
-                        referer = mainUrl,
-                        headers = headers + mapOf("X-Requested-With" to "XMLHttpRequest")
-                    ).parsedSafe<ResponseHash>()
-                } catch (e: Exception) {
-                    null
+            var iframe: String? = null
+
+            for (apiUrl in apiUrls) {
+                val response = withContext(Dispatchers.IO) {
+                    try {
+                        app.get(
+                            url = apiUrl,
+                            referer = mainUrl,
+                            headers = headers + mapOf("X-Requested-With" to "XMLHttpRequest")
+                        ).parsedSafe<ResponseHash>()
+                    } catch (e: Exception) {
+                        null
+                    }
                 }
+
+                iframe = response?.embedUrl?.getIframe()
+                if (!iframe.isNullOrBlank()) break
             }
 
-            val iframe = response?.embedUrl?.getIframe() ?: return false
+            if (iframe.isNullOrBlank()) return false
 
             if (iframe.contains("telly", ignoreCase = true) || iframe.contains("telly.xin", ignoreCase = true)) {
                 val playerDoc = withContext(Dispatchers.IO) {
@@ -304,9 +316,8 @@ class TellyHD : MainAPI() {
                     callback.invoke(link)
                     isSuccessful = true
                 }
-            } else if (iframe.isNotBlank() && !iframe.contains("youtube", ignoreCase = true)) {
+            } else if (!iframe.contains("youtube", ignoreCase = true)) {
                 try {
-                    // Handles playmogo, bigwarp, morencius, doodstream, vidhide, lulustream, etc. automatically
                     isSuccessful = loadExtractor(
                         iframe,
                         mainUrl,
