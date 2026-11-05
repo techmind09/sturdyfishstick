@@ -9,6 +9,8 @@ import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.net.URL
@@ -30,14 +32,9 @@ class TellyHD : MainAPI() {
 
     override val vpnStatus = VPNStatus.MightBeNeeded
 
-    private suspend fun getCurrUrl(): String {
-        return TellyHDPlugin.getDomains()?.Tellyhd?.takeIf { it.isNotBlank() } ?: mainUrl
-    }
-
     private val headers = mapOf(
-        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-        "Accept-Language" to "en-US,en;q=0.9"
+        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
     )
 
     private val playerHeaders = mapOf(
@@ -101,18 +98,18 @@ class TellyHD : MainAPI() {
         "genre/rasminair" to "RasmiNair"
     )
 
-    private fun getProperLink(uri: String, baseUrl: String): String {
+    private fun getProperLink(uri: String): String {
         val path = uri.substringBefore("?")
         return when {
             path.contains("/episodes/") -> {
                 val slug = path.substringAfter("/episodes/").substringBefore("/")
                 val showSlug = slug.substringBefore("-season").ifBlank { slug }
-                "$baseUrl/tvshows/$showSlug/"
+                "$mainUrl/tvshows/$showSlug/"
             }
             path.contains("/seasons/") -> {
                 val slug = path.substringAfter("/seasons/").substringBefore("/")
                 val showSlug = slug.substringBefore("-season").ifBlank { slug }
-                "$baseUrl/tvshows/$showSlug/"
+                "$mainUrl/tvshows/$showSlug/"
             }
             else -> uri
         }
@@ -128,12 +125,11 @@ class TellyHD : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val currUrl = getCurrUrl()
-        val url = if (page <= 1) "$currUrl/${request.data}/" else "$currUrl/${request.data}/page/$page/"
+        val url = if (page <= 1) "$mainUrl/${request.data}/" else "$mainUrl/${request.data}/page/$page/"
         val document = app.get(url, headers = headers).document
 
         val home = document.select("div.items.normal article, div#archive-content article, div.items.full article").mapNotNull {
-            it.toSearchResult(currUrl)
+            it.toSearchResult()
         }
 
         val hasNext = document.selectFirst("a.next, a[rel=next], .pagination a.next, a.page-numbers.next") != null
@@ -141,11 +137,11 @@ class TellyHD : MainAPI() {
         return newHomePageResponse(request.name, home, hasNext = hasNext)
     }
 
-    private fun Element.toSearchResult(baseUrl: String): SearchResponse? {
+    private fun Element.toSearchResult(): SearchResponse? {
         val anchor = selectFirst("h3 > a") ?: return null
         val title = anchor.text().trim().takeIf { it.isNotBlank() } ?: return null
         val rawUrl = fixUrlNull(anchor.attr("href")) ?: return null
-        val href = getProperLink(rawUrl, baseUrl)
+        val href = getProperLink(rawUrl)
 
         val image = select("div.poster img").lastOrNull()
         var posterUrl = image?.getImageAttr()
@@ -164,9 +160,8 @@ class TellyHD : MainAPI() {
     }
 
     private suspend fun getSearchPage(query: String, page: Int): Pair<List<SearchResponse>, Boolean> {
-        val currUrl = getCurrUrl()
         val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8").replace("+", "%20")
-        val url = if (page <= 1) "$currUrl/search/$encodedQuery/" else "$currUrl/search/$encodedQuery/page/$page/"
+        val url = if (page <= 1) "$mainUrl/search/$encodedQuery/" else "$mainUrl/search/$encodedQuery/page/$page/"
 
         val document = app.get(url, headers = headers).document
 
@@ -178,7 +173,7 @@ class TellyHD : MainAPI() {
             val href = fixUrlNull(anchor.attr("href")) ?: return@mapNotNull null
             val posterUrl = element.selectFirst("img")?.getImageAttr()?.let { fixUrlNull(it) }
 
-            newMovieSearchResponse(title, getProperLink(href, currUrl), TvType.NSFW) {
+            newMovieSearchResponse(title, getProperLink(href), TvType.NSFW) {
                 this.posterUrl = posterUrl
             }
         }
@@ -195,7 +190,6 @@ class TellyHD : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val currUrl = getCurrUrl()
         val document = app.get(url, headers = headers).document
 
         val title = document.selectFirst("div.data > h1")?.text()?.trim()?.takeIf { it.isNotBlank() } ?: return null
@@ -220,7 +214,7 @@ class TellyHD : MainAPI() {
             val recUrl = fixUrlNull(anchor.attr("href")) ?: return@mapNotNull null
             val recPoster = element.selectFirst("img")?.getImageAttr()?.let { fixUrlNull(it) }
 
-            newMovieSearchResponse(recTitle, getProperLink(recUrl, currUrl), TvType.NSFW) {
+            newMovieSearchResponse(recTitle, getProperLink(recUrl), TvType.NSFW) {
                 this.posterUrl = recPoster
             }
         }
@@ -259,53 +253,76 @@ class TellyHD : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val currUrl = getCurrUrl()
-        val loadData = tryParseJson<LinkData>(data) ?: return false
-        val post = loadData.post?.takeIf { it.isNotBlank() } ?: return false
-        val type = loadData.type?.takeIf { it.isNotBlank() } ?: "movie"
-        val nume = loadData.nume?.takeIf { it.isNotBlank() } ?: "1"
+        var isSuccessful = false
 
-        val apiUrl = "$currUrl/wp-json/dooplayer/v2/$post/$type/$nume"
+        try {
+            val loadData = tryParseJson<LinkData>(data) ?: return false
+            val post = loadData.post?.takeIf { it.isNotBlank() } ?: return false
+            val type = loadData.type?.takeIf { it.isNotBlank() } ?: "movie"
+            val nume = loadData.nume?.takeIf { it.isNotBlank() } ?: "1"
 
-        val response = app.get(
-            url = apiUrl,
-            referer = "$currUrl/",
-            headers = headers + mapOf(
-                "X-Requested-With" to "XMLHttpRequest",
-                "Accept" to "application/json, text/javascript, */*; q=0.1",
-                "Referer" to "$currUrl/"
-            )
-        ).parsedSafe<ResponseHash>()
+            val apiUrl = "$mainUrl/wp-json/dooplayer/v2/$post/$type/$nume"
 
-        val iframe = response?.embedUrl?.getIframe(currUrl) ?: return false
-
-        if (iframe.contains("telly", ignoreCase = true)) {
-            val playerDoc = app.get(url = iframe, referer = "$currUrl/", headers = headers + mapOf("Referer" to "$currUrl/")).document
-            val rawStreamUrl = playerDoc.selectFirst("script#player-loader")?.attr("data-stream-url")?.takeIf { it.isNotBlank() } ?: return false
-            val streamUrl = resolveUrl(iframe, rawStreamUrl)
-
-            if (!streamUrl.startsWith("http", true)) return false
-
-            val link = newExtractorLink(
-                source = name,
-                name = name,
-                url = streamUrl,
-                type = ExtractorLinkType.M3U8
-            ) {
-                this.referer = iframe
-                this.quality = Qualities.Unknown.value
-                this.headers = playerHeaders
+            val response = withContext(Dispatchers.IO) {
+                try {
+                    app.get(
+                        url = apiUrl,
+                        referer = mainUrl,
+                        headers = headers + mapOf("X-Requested-With" to "XMLHttpRequest")
+                    ).parsedSafe<ResponseHash>()
+                } catch (e: Exception) {
+                    null
+                }
             }
 
-            callback.invoke(link)
-            return true
+            val iframe = response?.embedUrl?.getIframe() ?: return false
+
+            if (iframe.contains("telly", ignoreCase = true) || iframe.contains("telly.xin", ignoreCase = true)) {
+                val playerDoc = withContext(Dispatchers.IO) {
+                    try {
+                        app.get(url = iframe, referer = mainUrl, headers = headers).document
+                    } catch (e: Exception) {
+                        null
+                    }
+                } ?: return false
+
+                val rawStreamUrl = playerDoc.selectFirst("script#player-loader")?.attr("data-stream-url")?.takeIf { it.isNotBlank() } ?: return false
+                val streamUrl = resolveUrl(iframe, rawStreamUrl)
+
+                if (streamUrl.startsWith("http", true)) {
+                    val link = newExtractorLink(
+                        source = name,
+                        name = name,
+                        url = streamUrl,
+                        type = ExtractorLinkType.M3U8
+                    ) {
+                        this.referer = iframe
+                        this.quality = Qualities.Unknown.value
+                        this.headers = playerHeaders
+                    }
+
+                    callback.invoke(link)
+                    isSuccessful = true
+                }
+            } else if (iframe.isNotBlank() && !iframe.contains("youtube", ignoreCase = true)) {
+                try {
+                    // Handles playmogo, bigwarp, morencius, doodstream, vidhide, lulustream, etc. automatically
+                    isSuccessful = loadExtractor(
+                        iframe,
+                        mainUrl,
+                        subtitleCallback,
+                        callback
+                    )
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
 
-        if (iframe.isNotBlank() && !iframe.contains("youtube", ignoreCase = true)) {
-            return loadExtractor(iframe, "$currUrl/", subtitleCallback, callback)
-        }
-
-        return false
+        return isSuccessful
     }
 
     private fun Element.getImageAttr(): String {
@@ -319,14 +336,14 @@ class TellyHD : MainAPI() {
         return attr("abs:srcset").substringBefore(",").substringBefore(" ").trim()
     }
 
-    private fun String.getIframe(baseUrl: String): String? {
+    private fun String.getIframe(): String? {
         val raw = trim()
         if (raw.isBlank()) return null
 
         val iframeSrc = Jsoup.parse(raw).selectFirst("iframe")?.attr("src")?.takeIf { it.isNotBlank() }
         val candidate = iframeSrc ?: raw.takeIf { it.startsWith("http", true) || it.startsWith("//") || it.startsWith("/") } ?: return null
 
-        return resolveUrl(baseUrl, candidate).takeIf { it.startsWith("http", true) }
+        return resolveUrl(mainUrl, candidate).takeIf { it.startsWith("http", true) }
     }
 
     data class LinkData(
