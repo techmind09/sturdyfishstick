@@ -13,7 +13,6 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.net.URL
 import java.net.URLEncoder
-import java.util.Calendar
 
 class TellyHDEn : MainAPI() {
 
@@ -30,14 +29,25 @@ class TellyHDEn : MainAPI() {
 
     override val vpnStatus = VPNStatus.MightBeNeeded
 
+    private suspend fun getCurrUrl(): String {
+        return TellyHDPlugin.getDomains()?.Tellyhd?.takeIf { it.isNotBlank() } ?: mainUrl
+    }
+
     private val headers = mapOf(
-        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
+        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language" to "en-US,en;q=0.9",
+        "Sec-Ch-Ua" to "\"Chromium\";v=\"122\", \"Not(A:Brand\";v=\"8\", \"Google Chrome\";v=\"122\"",
+        "Sec-Ch-Ua-Mobile" to "?0",
+        "Sec-Ch-Ua-Platform" to "\"Windows\""
     )
 
     private val playerHeaders = mapOf(
-        "User-Agent" to headers["User-Agent"].orEmpty(),
-        "Accept" to "*/*"
+        "User-Agent" to headers["User-Agent"]!!,
+        "Accept" to "*/*",
+        "Sec-Fetch-Site" to "cross-site",
+        "Sec-Fetch-Mode" to "cors",
+        "Sec-Fetch-Dest" to "video"
     )
 
     override val mainPage = mainPageOf(
@@ -70,18 +80,18 @@ class TellyHDEn : MainAPI() {
         "genre/wicked" to "Wicked"
     )
 
-    private fun getProperLink(uri: String): String {
+    private fun getProperLink(uri: String, baseUrl: String): String {
         val path = uri.substringBefore("?")
         return when {
             path.contains("/episodes/") -> {
                 val slug = path.substringAfter("/episodes/").substringBefore("/")
                 val showSlug = slug.substringBefore("-season").ifBlank { slug }
-                "$mainUrl/tvshows/$showSlug/"
+                "$baseUrl/tvshows/$showSlug/"
             }
             path.contains("/seasons/") -> {
                 val slug = path.substringAfter("/seasons/").substringBefore("/")
                 val showSlug = slug.substringBefore("-season").ifBlank { slug }
-                "$mainUrl/tvshows/$showSlug/"
+                "$baseUrl/tvshows/$showSlug/"
             }
             else -> uri
         }
@@ -102,23 +112,21 @@ class TellyHDEn : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        val currUrl = getCurrUrl()
         val url = if (page <= 1) {
-            "$mainUrl/${request.data}/"
+            "$currUrl/${request.data}/"
         } else {
-            "$mainUrl/${request.data}/page/$page/"
+            "$currUrl/${request.data}/page/$page/"
         }
 
-        val document = app.get(
-            url = url,
-            headers = headers
-        ).document
+        val document = app.get(url, headers = headers).document
 
         val home = document.select(
             "div.items.normal article, " +
                 "div#archive-content article, " +
                 "div.items.full article"
         ).mapNotNull {
-            it.toSearchResult()
+            it.toSearchResult(currUrl)
         }
 
         val hasNext = document.selectFirst(
@@ -134,11 +142,11 @@ class TellyHDEn : MainAPI() {
         )
     }
 
-    private fun Element.toSearchResult(): SearchResponse? {
+    private fun Element.toSearchResult(baseUrl: String): SearchResponse? {
         val anchor = selectFirst("h3 > a") ?: return null
         val title = anchor.text().trim().takeIf { it.isNotBlank() } ?: return null
         val rawUrl = fixUrlNull(anchor.attr("href")) ?: return null
-        val href = getProperLink(rawUrl)
+        val href = getProperLink(rawUrl, baseUrl)
 
         val image = select("div.poster img").lastOrNull()
         var posterUrl = image?.getImageAttr()
@@ -170,21 +178,19 @@ class TellyHDEn : MainAPI() {
         query: String,
         page: Int
     ): Pair<List<SearchResponse>, Boolean> {
+        val currUrl = getCurrUrl()
         val encodedQuery = URLEncoder.encode(
             query.trim(),
             "UTF-8"
         ).replace("+", "%20")
 
         val url = if (page <= 1) {
-            "$mainUrl/search/$encodedQuery/"
+            "$currUrl/search/$encodedQuery/"
         } else {
-            "$mainUrl/search/$encodedQuery/page/$page/"
+            "$currUrl/search/$encodedQuery/page/$page/"
         }
 
-        val document = app.get(
-            url = url,
-            headers = headers
-        ).document
+        val document = app.get(url, headers = headers).document
 
         val results = document.select("div.result-item")
             .mapNotNull { element ->
@@ -209,7 +215,7 @@ class TellyHDEn : MainAPI() {
 
                 newMovieSearchResponse(
                     title,
-                    getProperLink(href),
+                    getProperLink(href, currUrl),
                     TvType.NSFW
                 ) {
                     this.posterUrl = posterUrl
@@ -243,10 +249,8 @@ class TellyHDEn : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val document = app.get(
-            url = url,
-            headers = headers
-        ).document
+        val currUrl = getCurrUrl()
+        val document = app.get(url, headers = headers).document
 
         val title = document
             .selectFirst("div.data > h1")
@@ -311,7 +315,7 @@ class TellyHDEn : MainAPI() {
 
                 newMovieSearchResponse(
                     recTitle,
-                    getProperLink(recUrl),
+                    getProperLink(recUrl, currUrl),
                     TvType.NSFW
                 ) {
                     this.posterUrl = recPoster
@@ -382,6 +386,7 @@ class TellyHDEn : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        val currUrl = getCurrUrl()
         val loadData = tryParseJson<LinkData>(data)
             ?: return false
 
@@ -397,26 +402,29 @@ class TellyHDEn : MainAPI() {
             ?.takeIf { it.isNotBlank() }
             ?: "1"
 
-        val apiUrl = "$mainUrl/wp-json/dooplayer/v2/$post/$type/$nume"
+        val apiUrl = "$currUrl/wp-json/dooplayer/v2/$post/$type/$nume"
 
+        // Fully optimized Dooplayer request with X-Requested-With and proper Accept headers
         val response = app.get(
             url = apiUrl,
-            referer = mainUrl,
+            referer = "$currUrl/",
             headers = headers + mapOf(
-                "X-Requested-With" to "XMLHttpRequest"
+                "X-Requested-With" to "XMLHttpRequest",
+                "Accept" to "application/json, text/javascript, */*; q=0.1",
+                "Referer" to "$currUrl/"
             )
         ).parsedSafe<ResponseHash>()
 
         val iframe = response
             ?.embedUrl
-            ?.getIframe()
+            ?.getIframe(currUrl)
             ?: return false
 
         if (iframe.contains("telly", ignoreCase = true)) {
             val playerDoc = app.get(
                 url = iframe,
-                referer = mainUrl,
-                headers = headers
+                referer = "$currUrl/",
+                headers = headers + mapOf("Referer" to "$currUrl/")
             ).document
 
             val scriptTag = playerDoc.selectFirst(
@@ -456,10 +464,9 @@ class TellyHDEn : MainAPI() {
             iframe.isNotBlank() &&
             !iframe.contains("youtube", ignoreCase = true)
         ) {
-            // Cloudstream will automatically resolve Ultra Stream, Lulustream, Doodstream, Filemoon, Earnvids, Bigwarp, Vidhide, etc. via built-in extractors.
             return loadExtractor(
                 iframe,
-                mainUrl,
+                "$currUrl/",
                 subtitleCallback,
                 callback
             )
@@ -495,7 +502,7 @@ class TellyHDEn : MainAPI() {
         return srcset
     }
 
-    private fun String.getIframe(): String? {
+    private fun String.getIframe(baseUrl: String): String? {
         val raw = trim()
 
         if (raw.isBlank()) return null
@@ -513,7 +520,7 @@ class TellyHDEn : MainAPI() {
             }
             ?: return null
 
-        return resolveUrl(mainUrl, candidate)
+        return resolveUrl(baseUrl, candidate)
             .takeIf { it.startsWith("http", true) }
     }
 
