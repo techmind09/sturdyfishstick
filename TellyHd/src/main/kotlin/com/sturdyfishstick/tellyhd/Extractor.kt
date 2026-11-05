@@ -4,6 +4,7 @@ import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.extractors.LuluStream
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.extractors.VidhideExtractor
+import com.lagradost.cloudstream3.extractors.FileMoon
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.getQualityFromName
 import com.lagradost.cloudstream3.utils.INFER_TYPE
@@ -38,6 +39,12 @@ class Xtapes : VidhideExtractor() {
 class Luluvid : LuluStream() {
     override val name = "Lulustream"
     override val mainUrl = "https://luluvid.com"
+}
+
+// Yeh Filemoon extractor naya add kiya gaya hai taaki cdntelly streams play ho sakein
+class Filemoon : FileMoon() {
+    override var mainUrl = "https://filemoon.sx"
+    override var name = "Filemoon"
 }
 
 open class Ds2play : ExtractorApi() {
