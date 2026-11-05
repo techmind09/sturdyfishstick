@@ -35,14 +35,12 @@ class TellyHDEn : MainAPI() {
 
     private val headers = mapOf(
         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "X-Requested-With" to "XMLHttpRequest"
+        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
     )
 
     private val playerHeaders = mapOf(
         "User-Agent" to headers["User-Agent"].orEmpty(),
-        "Accept" to "*/*",
-        "X-Requested-With" to "XMLHttpRequest"
+        "Accept" to "*/*"
     )
 
     override val mainPage = mainPageOf(
@@ -406,6 +404,7 @@ class TellyHDEn : MainAPI() {
             ?.takeIf { it.isNotBlank() }
             ?: "1"
 
+        // Improved fallback/multi-endpoint API fallback strategy for Dooplay themes
         val apiEndpoints = listOf(
             "$currUrl/wp-json/dooplayer/v2/$post/$type/$nume",
             "$currUrl/wp-admin/admin-ajax.php?action=doo_player_ajax&post=$post&type=$type&nume=$nume",
@@ -420,6 +419,7 @@ class TellyHDEn : MainAPI() {
                     url = endpoint,
                     referer = "$currUrl/",
                     headers = headers + mapOf(
+                        "X-Requested-With" to "XMLHttpRequest",
                         "Accept" to "application/json, text/javascript, */*; q=0.1"
                     )
                 ).parsedSafe<ResponseHash>()
@@ -428,9 +428,10 @@ class TellyHDEn : MainAPI() {
             if (responseHash?.embedUrl != null) break
         }
 
+        // Additional fallback: scrape direct embed URL from page or try alternate request methods if JSON fails
         val iframe = responseHash?.embedUrl?.getIframe(currUrl) ?: run {
             val fallbackDoc = app.get(url = "$currUrl/?p=$post", referer = currUrl, headers = headers).document
-            fallbackDoc.selectFirst("iframe")?.attr("src")?.let { it.getIframe(currUrl) }
+            fallbackDoc.selectFirst("iframe")?.attr("src")?.let { getIframe(it, currUrl) }
         } ?: return false
 
         if (iframe.contains("telly", ignoreCase = true) || iframe.contains("embed", ignoreCase = true)) {
@@ -457,7 +458,7 @@ class TellyHDEn : MainAPI() {
                 source = name,
                 name = name,
                 url = streamUrl,
-                type = ExtractorLinkType.M3U8
+                type = if (streamUrl.contains(".m3u8", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.Video
             ) {
                 this.referer = iframe
                 this.quality = Qualities.Unknown.value
