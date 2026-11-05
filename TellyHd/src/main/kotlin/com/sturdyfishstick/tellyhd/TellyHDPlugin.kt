@@ -8,10 +8,13 @@ import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
 
 @CloudstreamPlugin
-class TellyHDPlugin: Plugin() {
+class TellyHDPlugin : Plugin() {
     override fun load(context: Context) {
+        // Registering both Hindi and English Main APIs
         registerMainAPI(TellyHD())
         registerMainAPI(TellyHDEn())
+
+        // Registering all custom and built-in extractors
         registerExtractorAPI(Ds2play())
         registerExtractorAPI(Vidsp())
         registerExtractorAPI(VidHidePro3())
