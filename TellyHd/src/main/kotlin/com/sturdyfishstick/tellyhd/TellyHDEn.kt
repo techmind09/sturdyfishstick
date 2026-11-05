@@ -430,7 +430,7 @@ class TellyHDEn : MainAPI() {
 
         val iframe = responseHash?.embedUrl?.getIframe(currUrl) ?: run {
             val fallbackDoc = app.get(url = "$currUrl/?p=$post", referer = currUrl, headers = headers).document
-            fallbackDoc.selectFirst("iframe")?.attr("src")?.let { getIframe(it, currUrl) }
+            fallbackDoc.selectFirst("iframe")?.attr("src")?.let { it.getIframe(currUrl) }
         } ?: return false
 
         if (iframe.contains("telly", ignoreCase = true) || iframe.contains("embed", ignoreCase = true)) {
@@ -457,7 +457,7 @@ class TellyHDEn : MainAPI() {
                 source = name,
                 name = name,
                 url = streamUrl,
-                type = if (streamUrl.contains(".m3u8", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.Video
+                type = if (streamUrl.contains(".m3u8", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.Streams
             ) {
                 this.referer = iframe
                 this.quality = Qualities.Unknown.value
