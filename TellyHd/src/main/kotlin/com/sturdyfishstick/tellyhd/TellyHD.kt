@@ -289,6 +289,7 @@ class TellyHD : MainAPI() {
         }
 
         if (iframe.isNotBlank() && !iframe.contains("youtube", ignoreCase = true)) {
+            // Cloudstream will automatically resolve and handle Ultra Stream, Lulustream, Doodstream, Filemoon, Earnvids, Bigwarp, Vidhide, etc. via built-in extractors.
             return loadExtractor(iframe, mainUrl, subtitleCallback, callback)
         }
 
