@@ -15,7 +15,6 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.net.URL
 import java.net.URLEncoder
-import java.util.Calendar
 
 class TellyHDEn : MainAPI() {
 
@@ -411,46 +410,48 @@ class TellyHDEn : MainAPI() {
 
         try {
             val loadData = tryParseJson<LinkData>(data) ?: return false
-
             val post = loadData.post?.takeIf { it.isNotBlank() } ?: return false
             val type = loadData.type?.takeIf { it.isNotBlank() } ?: "movie"
             val nume = loadData.nume?.takeIf { it.isNotBlank() } ?: "1"
 
-            val apiUrl = "$mainUrl/wp-json/dooplayer/v2/$post/$type/$nume"
+            // Multi-Endpoint Fallback (v2 API, v1 API, aur Admin-Ajax fallback)
+            val apiUrls = listOf(
+                "$mainUrl/wp-json/dooplayer/v2/$post/$type/$nume",
+                "$mainUrl/wp-json/dooplayer/v1/$post/$type/$nume",
+                "$mainUrl/wp-admin/admin-ajax.php?action=doo_player_ajax&post=$post&type=$type&nume=$nume"
+            )
 
-            val response = withContext(Dispatchers.IO) {
-                try {
-                    app.get(
-                        url = apiUrl,
-                        referer = mainUrl,
-                        headers = headers + mapOf(
-                            "X-Requested-With" to "XMLHttpRequest"
-                        )
-                    ).parsedSafe<ResponseHash>()
-                } catch (e: java.net.SocketTimeoutException) {
-                    throw Exception("Connection timed out while fetching player API: ${e.localizedMessage}")
-                } catch (e: java.io.IOException) {
-                    throw Exception("Network I/O error occurred: ${e.localizedMessage}")
-                }
-            }
+            var iframe: String? = null
 
-            val iframe = response?.embedUrl?.getIframe() ?: return false
-
-            if (iframe.contains("telly", ignoreCase = true)) {
-                val playerDoc = withContext(Dispatchers.IO) {
+            for (apiUrl in apiUrls) {
+                val response = withContext(Dispatchers.IO) {
                     try {
                         app.get(
-                            url = iframe,
+                            url = apiUrl,
                             referer = mainUrl,
-                            headers = headers
-                        ).document
+                            headers = headers + mapOf("X-Requested-With" to "XMLHttpRequest")
+                        ).parsedSafe<ResponseHash>()
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+
+                iframe = response?.embedUrl?.getIframe()
+                if (!iframe.isNullOrBlank()) break
+            }
+
+            if (iframe.isNullOrBlank()) return false
+
+            if (iframe.contains("telly", ignoreCase = true) || iframe.contains("telly.xin", ignoreCase = true)) {
+                val playerDoc = withContext(Dispatchers.IO) {
+                    try {
+                        app.get(url = iframe, referer = mainUrl, headers = headers).document
                     } catch (e: Exception) {
                         null
                     }
                 } ?: return false
 
-                val scriptTag = playerDoc.selectFirst("script#player-loader")
-                val rawStreamUrl = scriptTag?.attr("data-stream-url")?.takeIf { it.isNotBlank() } ?: return false
+                val rawStreamUrl = playerDoc.selectFirst("script#player-loader")?.attr("data-stream-url")?.takeIf { it.isNotBlank() } ?: return false
                 val streamUrl = resolveUrl(iframe, rawStreamUrl)
 
                 if (streamUrl.startsWith("http", true)) {
@@ -468,7 +469,7 @@ class TellyHDEn : MainAPI() {
                     callback.invoke(link)
                     isSuccessful = true
                 }
-            } else if (iframe.isNotBlank() && !iframe.contains("youtube", ignoreCase = true)) {
+            } else if (!iframe.contains("youtube", ignoreCase = true)) {
                 try {
                     isSuccessful = loadExtractor(
                         iframe,
@@ -481,8 +482,6 @@ class TellyHDEn : MainAPI() {
                 }
             }
 
-        } catch (e: IllegalArgumentException) {
-            e.printStackTrace()
         } catch (e: Exception) {
             e.printStackTrace()
         }
