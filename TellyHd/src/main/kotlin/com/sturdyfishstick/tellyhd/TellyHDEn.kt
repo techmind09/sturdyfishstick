@@ -13,6 +13,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.net.URL
 import java.net.URLEncoder
+import java.util.Calendar
 
 class TellyHDEn : MainAPI() {
 
@@ -35,38 +36,40 @@ class TellyHDEn : MainAPI() {
     )
 
     private val playerHeaders = mapOf(
-        "User-Agent" to headers["User-Agent"]!!,
+        "User-Agent" to headers["User-Agent"].orEmpty(),
         "Accept" to "*/*"
     )
 
     override val mainPage = mainPageOf(
+        "release/${Calendar.getInstance().get(Calendar.YEAR)}" to "Latest",
         "genre/adventure" to "Adventure",
         "genre/attackers" to "Attackers",
         "genre/brazzers" to "Brazzers",
         "genre/chinese" to "Chinese",
+        "genre/altbalaji" to "Alt Balaji",
         "genre/deeper" to "Deeper",
         "genre/digital-playground" to "Digital Playground",
-        "genre/documentary" to "Documentary", 
-        "genre/eng-subtitle" to "Eng Subtitle", 
-        "genre/english" to "English", 
-        "genre/france" to "France", 
-        "genre/hong-kong" to "Hong Kong", 
+        "genre/documentary" to "Documentary",
+        "genre/eng-subtitle" to "Eng Subtitle",
+        "genre/english" to "English",
+        "genre/france" to "France",
+        "genre/hong-kong" to "Hong Kong",
         "genre/japan" to "Japan",
         "genre/jav" to "JAV",
-        "genre/korean" to "Korean", 
-        "genre/marc-dorcel" to "Marc Dorcel", 
-        "genre/onlyfans" to "OnlyFans", 
-        "genre/philippine" to "Philippine", 
-        "genre/private" to "Private", 
-        "genre/science-fiction" to "Science Fiction", 
-        "genre/sexart" to "SexArt", 
+        "genre/korean" to "Korean",
+        "genre/marc-dorcel" to "Marc Dorcel",
+        "genre/onlyfans" to "OnlyFans",
+        "genre/philippine" to "Philippine",
+        "genre/private" to "Private",
+        "genre/science-fiction" to "Science Fiction",
+        "genre/sexart" to "SexArt",
         "genre/sexmex" to "Sexmex",
-        "genre/sunny-leone" to "Sunny Leone", 
-        "genre/tbonx" to "TbonX", 
-        "genre/usa" to "USA", 
-        "genre/vintage" to "Vintage", 
+        "genre/sunny-leone" to "Sunny Leone",
+        "genre/tbonx" to "TbonX",
+        "genre/usa" to "USA",
+        "genre/vintage" to "Vintage",
         "genre/vivamax" to "VivaMax",
-        "genre/vixen" to "Vixen", 
+        "genre/vixen" to "Vixen",
         "genre/wicked" to "Wicked"
     )
 
@@ -92,21 +95,46 @@ class TellyHDEn : MainAPI() {
         return when {
             value.startsWith("https://", true) || value.startsWith("http://", true) -> value
             value.startsWith("//") -> "https:$value"
-            else -> runCatching { URL(URL(baseUrl), value).toString() }.getOrDefault(value)
+            else -> runCatching {
+                URL(URL(baseUrl), value).toString()
+            }.getOrDefault(value)
         }
     }
 
-    override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val url = if (page <= 1) "$mainUrl/${request.data}/" else "$mainUrl/${request.data}/page/$page/"
-        val document = app.get(url, headers = headers, timeout = 15L).document
+    override suspend fun getMainPage(
+        page: Int,
+        request: MainPageRequest
+    ): HomePageResponse {
+        val url = if (page <= 1) {
+            "$mainUrl/${request.data}/"
+        } else {
+            "$mainUrl/${request.data}/page/$page/"
+        }
 
-        val home = document.select("div.items.normal article, div#archive-content article, div.items.full article").mapNotNull {
+        val document = app.get(
+            url = url,
+            headers = headers
+        ).document
+
+        val home = document.select(
+            "div.items.normal article, " +
+                "div#archive-content article, " +
+                "div.items.full article"
+        ).mapNotNull {
             it.toSearchResult()
         }
 
-        val hasNext = document.selectFirst("a.next, a[rel=next], .pagination a.next, a.page-numbers.next") != null
+        val hasNext = document.selectFirst(
+            "a.next, a[rel=next], " +
+                ".pagination a.next, " +
+                "a.page-numbers.next"
+        ) != null
 
-        return newHomePageResponse(request.name, home, hasNext = hasNext)
+        return newHomePageResponse(
+            request.name,
+            home,
+            hasNext = hasNext
+        )
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
@@ -119,98 +147,230 @@ class TellyHDEn : MainAPI() {
         var posterUrl = image?.getImageAttr()
 
         if (posterUrl?.contains(".gif", true) == true) {
-            posterUrl = image?.attr("abs:data-wpfc-original-src")?.takeIf { it.isNotBlank() } ?: posterUrl
+            posterUrl = image
+                ?.attr("abs:data-wpfc-original-src")
+                ?.takeIf { it.isNotBlank() }
+                ?: posterUrl
         }
+
         posterUrl = fixUrlNull(posterUrl)
 
-        val quality = getQualityFromString(select("span.quality").text())
+        val quality = getQualityFromString(
+            select("span.quality").text()
+        )
 
-        return newMovieSearchResponse(title, href, TvType.NSFW) {
+        return newMovieSearchResponse(
+            title,
+            href,
+            TvType.NSFW
+        ) {
             this.posterUrl = posterUrl
             this.quality = quality
         }
     }
 
-    private suspend fun getSearchPage(query: String, page: Int): Pair<List<SearchResponse>, Boolean> {
-        val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8").replace("+", "%20")
-        val url = if (page <= 1) "$mainUrl/search/$encodedQuery/" else "$mainUrl/search/$encodedQuery/page/$page/"
+    private suspend fun getSearchPage(
+        query: String,
+        page: Int
+    ): Pair<List<SearchResponse>, Boolean> {
+        val encodedQuery = URLEncoder.encode(
+            query.trim(),
+            "UTF-8"
+        ).replace("+", "%20")
 
-        val document = app.get(url, headers = headers, timeout = 15L).document
-
-        val results = document.select("div.result-item").mapNotNull { element ->
-            val anchor = element.selectFirst("div.title > a") ?: return@mapNotNull null
-            val title = anchor.text().replace(Regex("\\(\\d{4}\\)"), "").trim()
-            if (title.isBlank()) return@mapNotNull null
-
-            val href = fixUrlNull(anchor.attr("href")) ?: return@mapNotNull null
-            val posterUrl = element.selectFirst("img")?.getImageAttr()?.let { fixUrlNull(it) }
-
-            newMovieSearchResponse(title, getProperLink(href), TvType.NSFW) {
-                this.posterUrl = posterUrl
-            }
+        val url = if (page <= 1) {
+            "$mainUrl/search/$encodedQuery/"
+        } else {
+            "$mainUrl/search/$encodedQuery/page/$page/"
         }
 
-        val hasNext = document.selectFirst("a.next, a[rel=next], .pagination a.next, a.page-numbers.next") != null
+        val document = app.get(
+            url = url,
+            headers = headers
+        ).document
+
+        val results = document.select("div.result-item")
+            .mapNotNull { element ->
+                val anchor = element.selectFirst("div.title > a")
+                    ?: return@mapNotNull null
+
+                val title = anchor.text()
+                    .replace(Regex("\\(\\d{4}\\)"), "")
+                    .trim()
+
+                if (title.isBlank()) {
+                    return@mapNotNull null
+                }
+
+                val href = fixUrlNull(anchor.attr("href"))
+                    ?: return@mapNotNull null
+
+                val posterUrl = element
+                    .selectFirst("img")
+                    ?.getImageAttr()
+                    ?.let { fixUrlNull(it) }
+
+                newMovieSearchResponse(
+                    title,
+                    getProperLink(href),
+                    TvType.NSFW
+                ) {
+                    this.posterUrl = posterUrl
+                }
+            }
+
+        val hasNext = document.selectFirst(
+            "a.next, a[rel=next], " +
+                ".pagination a.next, " +
+                "a.page-numbers.next"
+        ) != null
+
         return results to hasNext
     }
 
-    override suspend fun search(query: String): List<SearchResponse> = getSearchPage(query, 1).first
+    override suspend fun search(
+        query: String
+    ): List<SearchResponse> {
+        return getSearchPage(query, 1).first
+    }
 
-    override suspend fun search(query: String, page: Int): SearchResponseList {
+    override suspend fun search(
+        query: String,
+        page: Int
+    ): SearchResponseList {
         val (results, hasNext) = getSearchPage(query, page)
-        return newSearchResponseList(results, hasNext = hasNext)
+        return newSearchResponseList(
+            results,
+            hasNext = hasNext
+        )
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val document = app.get(url, headers = headers, timeout = 15L).document
+        val document = app.get(
+            url = url,
+            headers = headers
+        ).document
 
-        val title = document.selectFirst("div.data > h1")?.text()?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        val title = document
+            .selectFirst("div.data > h1")
+            ?.text()
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: return null
 
-        var posterUrl = document.selectFirst("div.poster img")?.getImageAttr()?.let { fixUrlNull(it) }
+        var posterUrl = document
+            .selectFirst("div.poster img")
+            ?.getImageAttr()
+            ?.let { fixUrlNull(it) }
+
         if (posterUrl.isNullOrEmpty()) {
-            posterUrl = fixUrlNull(document.selectFirst("meta[property=og:image]")?.attr("content"))
+            posterUrl = fixUrlNull(
+                document.selectFirst(
+                    "meta[property=og:image]"
+                )?.attr("content")
+            )
         }
 
-        val description = document.selectFirst("div[itemprop=description] p, div.wp-content p")?.text()?.trim()
+        val description = document.selectFirst(
+            "div[itemprop=description] p, div.wp-content p"
+        )?.text()?.trim()
 
-        val year = document.selectFirst("span.date")?.text()?.substringAfterLast(", ")?.toIntOrNull()
-            ?: Regex("\\((\\d{4})\\)").find(title)?.groupValues?.getOrNull(1)?.toIntOrNull()
+        val year = document.selectFirst("span.date")
+            ?.text()
+            ?.substringAfterLast(", ")
+            ?.toIntOrNull()
+            ?: Regex("\\((\\d{4})\\)")
+                .find(title)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.toIntOrNull()
 
-        val tags = document.select("div.sgeneros a").map { it.text() }.filter { it.isNotBlank() }
+        val tags = document.select("div.sgeneros a")
+            .map { it.text() }
+            .filter { it.isNotBlank() }
 
-        val recommendations = document.select("div#single_relacionados article").mapNotNull { element ->
-            val anchor = element.selectFirst("a") ?: return@mapNotNull null
-            val recTitle = element.selectFirst("img")?.attr("alt")?.takeIf { it.isNotBlank() } ?: anchor.text().trim()
-            if (recTitle.isBlank()) return@mapNotNull null
+        val recommendations = document
+            .select("div#single_relacionados article")
+            .mapNotNull { element ->
+                val anchor = element.selectFirst("a")
+                    ?: return@mapNotNull null
 
-            val recUrl = fixUrlNull(anchor.attr("href")) ?: return@mapNotNull null
-            val recPoster = element.selectFirst("img")?.getImageAttr()?.let { fixUrlNull(it) }
+                val recTitle = element.selectFirst("img")
+                    ?.attr("alt")
+                    ?.takeIf { it.isNotBlank() }
+                    ?: anchor.text().trim()
 
-            newMovieSearchResponse(recTitle, getProperLink(recUrl), TvType.NSFW) {
-                this.posterUrl = recPoster
+                if (recTitle.isBlank()) {
+                    return@mapNotNull null
+                }
+
+                val recUrl = fixUrlNull(anchor.attr("href"))
+                    ?: return@mapNotNull null
+
+                val recPoster = element
+                    .selectFirst("img")
+                    ?.getImageAttr()
+                    ?.let { fixUrlNull(it) }
+
+                newMovieSearchResponse(
+                    recTitle,
+                    getProperLink(recUrl),
+                    TvType.NSFW
+                ) {
+                    this.posterUrl = recPoster
+                }
             }
-        }
 
         val episodes = document.select(
-            "ul#playeroptionsul > li, div.play-options li, .sources-box li, .dooplay_player_option, .options li"
+            "ul#playeroptionsul > li, " +
+                "div.play-options li, " +
+                ".sources-box li, " +
+                ".dooplay_player_option, " +
+                ".options li"
         ).mapNotNull { element ->
-            val name = element.selectFirst("span.title")?.text()?.trim()?.takeIf { it.isNotBlank() }
-                ?: element.select("span").text().trim().ifBlank { element.text().trim() }
+            val name = element.selectFirst("span.title")
+                ?.text()
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: element.select("span").text().trim()
+                    .ifBlank { element.text().trim() }
 
-            val type = element.attr("data-type").ifBlank { element.attr("data-film") }.ifBlank { "movie" }
-            val post = element.attr("data-post").ifBlank { element.attr("data-id") }.ifBlank { element.attr("data-movie") }.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            val nume = element.attr("data-nume").ifBlank { element.attr("data-episode") }.ifBlank { element.attr("data-seq") }.ifBlank { "1" }
+            val type = element.attr("data-type")
+                .ifBlank { element.attr("data-film") }
+                .ifBlank { "movie" }
 
-            if (name.contains("trailer", true)) return@mapNotNull null
+            val post = element.attr("data-post")
+                .ifBlank { element.attr("data-id") }
+                .ifBlank { element.attr("data-movie") }
+                .takeIf { it.isNotBlank() }
+                ?: return@mapNotNull null
 
-            val json = LinkData(type = type, post = post, nume = nume).toJson()
+            val nume = element.attr("data-nume")
+                .ifBlank { element.attr("data-episode") }
+                .ifBlank { element.attr("data-seq") }
+                .ifBlank { "1" }
+
+            if (name.contains("trailer", true)) {
+                return@mapNotNull null
+            }
+
+            val json = LinkData(
+                type = type,
+                post = post,
+                nume = nume
+            ).toJson()
 
             newEpisode(json) {
                 this.name = name.ifBlank { "Server" }
             }
         }.distinctBy { it.name }
 
-        return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+        return newTvSeriesLoadResponse(
+            title,
+            url,
+            TvType.TvSeries,
+            episodes
+        ) {
             this.posterUrl = posterUrl
             this.plot = description
             this.year = year
@@ -225,54 +385,60 @@ class TellyHDEn : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val loadData = tryParseJson<LinkData>(data) ?: return false
-        val post = loadData.post?.takeIf { it.isNotBlank() } ?: return false
-        val type = loadData.type?.takeIf { it.isNotBlank() } ?: "movie"
-        val nume = loadData.nume?.takeIf { it.isNotBlank() } ?: "1"
+        val loadData = tryParseJson<LinkData>(data)
+            ?: return false
+
+        val post = loadData.post
+            ?.takeIf { it.isNotBlank() }
+            ?: return false
+
+        val type = loadData.type
+            ?.takeIf { it.isNotBlank() }
+            ?: "movie"
+
+        val nume = loadData.nume
+            ?.takeIf { it.isNotBlank() }
+            ?: "1"
 
         val apiUrl = "$mainUrl/wp-json/dooplayer/v2/$post/$type/$nume"
-        
-        val jsonResponse = runCatching {
-            app.get(
-                url = apiUrl,
+
+        val response = app.get(
+            url = apiUrl,
+            referer = mainUrl,
+            headers = headers + mapOf(
+                "X-Requested-With" to "XMLHttpRequest"
+            )
+        ).parsedSafe<ResponseHash>()
+
+        val iframe = response
+            ?.embedUrl
+            ?.getIframe()
+            ?: return false
+
+        if (iframe.contains("telly", ignoreCase = true)) {
+            val playerDoc = app.get(
+                url = iframe,
                 referer = mainUrl,
-                headers = headers + mapOf("X-Requested-With" to "XMLHttpRequest"),
-                timeout = 10L
-            ).text
-        }.getOrNull()
+                headers = headers
+            ).document
 
-        var iframeUrl: String? = null
+            val scriptTag = playerDoc.selectFirst(
+                "script#player-loader"
+            )
 
-        if (!jsonResponse.isNullOrBlank()) {
-            val embedUrlRegex = "\"embed_url\":\"([^\"]+)\"".toRegex()
-            val matchedEmbed = embedUrlRegex.find(jsonResponse)?.groups?.get(1)?.value
-            val cleanEmbedHtml = matchedEmbed?.replace("\\\\\"", "\"")
-            
-            val srcRegex = "src=\"([^\"]+)\"".toRegex()
-            iframeUrl = cleanEmbedHtml?.let { srcRegex.find(it)?.groups?.get(1)?.value }?.let { resolveUrl(mainUrl, it) }
-        }
+            val rawStreamUrl = scriptTag
+                ?.attr("data-stream-url")
+                ?.takeIf { it.isNotBlank() }
+                ?: return false
 
-        // Fallback: Agar Dooplayer API se link na mile toh direct post page se iframe uthayein
-        if (iframeUrl.isNullOrBlank()) {
-            val fallbackDoc = runCatching {
-                app.get("$mainUrl/?p=$post", headers = headers, timeout = 10L).document
-            }.getOrNull()
-            
-            iframeUrl = fallbackDoc?.select("iframe")?.attr("src")?.let { resolveUrl(mainUrl, it) }
-        }
+            val streamUrl = resolveUrl(
+                iframe,
+                rawStreamUrl
+            )
 
-        if (iframeUrl.isNullOrBlank()) return false
-
-        if (iframeUrl.contains("telly", ignoreCase = true)) {
-            val playerDoc = runCatching {
-                app.get(url = iframeUrl, referer = mainUrl, headers = headers, timeout = 10L).document
-            }.getOrNull() ?: return false
-
-            val rawStreamUrl = playerDoc.selectFirst("script#player-loader")?.attr("data-stream-url")
-            if (rawStreamUrl.isNullOrBlank()) return false
-            
-            val streamUrl = resolveUrl(iframeUrl, rawStreamUrl)
-            if (!streamUrl.startsWith("http", true)) return false
+            if (!streamUrl.startsWith("http", true)) {
+                return false
+            }
 
             val link = newExtractorLink(
                 source = name,
@@ -280,7 +446,7 @@ class TellyHDEn : MainAPI() {
                 url = streamUrl,
                 type = ExtractorLinkType.M3U8
             ) {
-                this.referer = iframeUrl
+                this.referer = iframe
                 this.quality = Qualities.Unknown.value
                 this.headers = playerHeaders
             }
@@ -289,23 +455,69 @@ class TellyHDEn : MainAPI() {
             return true
         }
 
-        if (iframeUrl.isNotBlank() && !iframeUrl.contains("youtube", ignoreCase = true)) {
-            loadExtractor(iframeUrl, mainUrl, subtitleCallback, callback)
-            return true
+        if (
+            iframe.isNotBlank() &&
+            !iframe.contains("youtube", ignoreCase = true)
+        ) {
+            // Cloudstream will automatically resolve Ultra Stream, Lulustream, Doodstream, Filemoon, Earnvids, Bigwarp, Vidhide, etc. via built-in extractors.
+            return loadExtractor(
+                iframe,
+                mainUrl,
+                subtitleCallback,
+                callback
+            )
         }
 
         return false
     }
 
     private fun Element.getImageAttr(): String {
-        val candidates = listOf("abs:data-wpfc-original-src", "abs:data-src", "abs:data-lazy-src", "abs:src")
+        val candidates = listOf(
+            "abs:data-wpfc-original-src",
+            "abs:data-src",
+            "abs:data-lazy-src",
+            "abs:src"
+        )
+
         for (attribute in candidates) {
             val value = attr(attribute).trim()
-            if (value.isNotBlank() && !value.startsWith("data:image", true)) {
+
+            if (
+                value.isNotBlank() &&
+                !value.startsWith("data:image", true)
+            ) {
                 return value
             }
         }
-        return attr("abs:srcset").substringBefore(",").substringBefore(" ").trim()
+
+        val srcset = attr("abs:srcset")
+            .substringBefore(",")
+            .substringBefore(" ")
+            .trim()
+
+        return srcset
+    }
+
+    private fun String.getIframe(): String? {
+        val raw = trim()
+
+        if (raw.isBlank()) return null
+
+        val iframeSrc = Jsoup.parse(raw)
+            .selectFirst("iframe")
+            ?.attr("src")
+            ?.takeIf { it.isNotBlank() }
+
+        val candidate = iframeSrc
+            ?: raw.takeIf {
+                it.startsWith("http", true) ||
+                    it.startsWith("//") ||
+                    it.startsWith("/")
+            }
+            ?: return null
+
+        return resolveUrl(mainUrl, candidate)
+            .takeIf { it.startsWith("http", true) }
     }
 
     data class LinkData(
@@ -315,7 +527,8 @@ class TellyHDEn : MainAPI() {
     )
 
     data class ResponseHash(
-        @JsonProperty("embed_url") val embedUrl: String? = null,
+        @JsonProperty("embed_url")
+        val embedUrl: String? = null,
         val type: String? = null
     )
 }
