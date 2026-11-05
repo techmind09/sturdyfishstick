@@ -34,20 +34,15 @@ class TellyHDEn : MainAPI() {
     }
 
     private val headers = mapOf(
-        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-        "Accept-Language" to "en-US,en;q=0.9",
-        "Sec-Ch-Ua" to "\"Chromium\";v=\"122\", \"Not(A:Brand\";v=\"8\", \"Google Chrome\";v=\"122\"",
-        "Sec-Ch-Ua-Mobile" to "?0",
-        "Sec-Ch-Ua-Platform" to "\"Windows\""
+        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "X-Requested-With" to "XMLHttpRequest"
     )
 
     private val playerHeaders = mapOf(
-        "User-Agent" to headers["User-Agent"]!!,
+        "User-Agent" to headers["User-Agent"].orEmpty(),
         "Accept" to "*/*",
-        "Sec-Fetch-Site" to "cross-site",
-        "Sec-Fetch-Mode" to "cors",
-        "Sec-Fetch-Dest" to "video"
+        "X-Requested-With" to "XMLHttpRequest"
     )
 
     override val mainPage = mainPageOf(
@@ -119,7 +114,10 @@ class TellyHDEn : MainAPI() {
             "$currUrl/${request.data}/page/$page/"
         }
 
-        val document = app.get(url, headers = headers).document
+        val document = app.get(
+            url = url,
+            headers = headers
+        ).document
 
         val home = document.select(
             "div.items.normal article, " +
@@ -190,7 +188,10 @@ class TellyHDEn : MainAPI() {
             "$currUrl/search/$encodedQuery/page/$page/"
         }
 
-        val document = app.get(url, headers = headers).document
+        val document = app.get(
+            url = url,
+            headers = headers
+        ).document
 
         val results = document.select("div.result-item")
             .mapNotNull { element ->
@@ -250,7 +251,10 @@ class TellyHDEn : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse? {
         val currUrl = getCurrUrl()
-        val document = app.get(url, headers = headers).document
+        val document = app.get(
+            url = url,
+            headers = headers
+        ).document
 
         val title = document
             .selectFirst("div.data > h1")
@@ -402,44 +406,48 @@ class TellyHDEn : MainAPI() {
             ?.takeIf { it.isNotBlank() }
             ?: "1"
 
-        val apiUrl = "$currUrl/wp-json/dooplayer/v2/$post/$type/$nume"
+        val apiEndpoints = listOf(
+            "$currUrl/wp-json/dooplayer/v2/$post/$type/$nume",
+            "$currUrl/wp-admin/admin-ajax.php?action=doo_player_ajax&post=$post&type=$type&nume=$nume",
+            "$currUrl/wp-json/dooplayer/v1/$post/$type/$nume"
+        )
 
-        // Fully optimized Dooplayer request with X-Requested-With and proper Accept headers
-        val response = app.get(
-            url = apiUrl,
-            referer = "$currUrl/",
-            headers = headers + mapOf(
-                "X-Requested-With" to "XMLHttpRequest",
-                "Accept" to "application/json, text/javascript, */*; q=0.1",
-                "Referer" to "$currUrl/"
-            )
-        ).parsedSafe<ResponseHash>()
+        var responseHash: ResponseHash? = null
 
-        val iframe = response
-            ?.embedUrl
-            ?.getIframe(currUrl)
-            ?: return false
+        for (endpoint in apiEndpoints) {
+            responseHash = runCatching {
+                app.get(
+                    url = endpoint,
+                    referer = "$currUrl/",
+                    headers = headers + mapOf(
+                        "Accept" to "application/json, text/javascript, */*; q=0.1"
+                    )
+                ).parsedSafe<ResponseHash>()
+            }.getOrNull()
 
-        if (iframe.contains("telly", ignoreCase = true)) {
+            if (responseHash?.embedUrl != null) break
+        }
+
+        val iframe = responseHash?.embedUrl?.getIframe(currUrl) ?: run {
+            val fallbackDoc = app.get(url = "$currUrl/?p=$post", referer = currUrl, headers = headers).document
+            fallbackDoc.selectFirst("iframe")?.attr("src")?.let { getIframe(it, currUrl) }
+        } ?: return false
+
+        if (iframe.contains("telly", ignoreCase = true) || iframe.contains("embed", ignoreCase = true)) {
             val playerDoc = app.get(
                 url = iframe,
                 referer = "$currUrl/",
-                headers = headers + mapOf("Referer" to "$currUrl/")
+                headers = headers
             ).document
 
-            val scriptTag = playerDoc.selectFirst(
-                "script#player-loader"
-            )
-
-            val rawStreamUrl = scriptTag
+            val rawStreamUrl = playerDoc.selectFirst("script#player-loader")
                 ?.attr("data-stream-url")
                 ?.takeIf { it.isNotBlank() }
+                ?: playerDoc.select("script").map { it.data() }.firstOrNull { it.contains("file:") || it.contains("sources:") }
+                    ?.let { Regex("[\"'](https?://[^\"']+\\.(m3u8|mp4)[^\"']*)[\"']").find(it)?.groupValues?.get(1) }
                 ?: return false
 
-            val streamUrl = resolveUrl(
-                iframe,
-                rawStreamUrl
-            )
+            val streamUrl = resolveUrl(iframe, rawStreamUrl)
 
             if (!streamUrl.startsWith("http", true)) {
                 return false
@@ -449,7 +457,7 @@ class TellyHDEn : MainAPI() {
                 source = name,
                 name = name,
                 url = streamUrl,
-                type = ExtractorLinkType.M3U8
+                type = if (streamUrl.contains(".m3u8", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.Video
             ) {
                 this.referer = iframe
                 this.quality = Qualities.Unknown.value
