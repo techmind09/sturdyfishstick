@@ -366,8 +366,7 @@ class TellyHDEn : MainAPI() {
                 .takeIf { it.isNotBlank() }
                 ?: return@mapNotNull null
 
-            val nume = element.parseAttrNum() // or fallback
-            val numeAttr = element.attr("data-nume")
+            val nume = element.attr("data-nume")
                 .ifBlank { element.attr("data-episode") }
                 .ifBlank { element.attr("data-seq") }
                 .ifBlank { "1" }
@@ -379,7 +378,7 @@ class TellyHDEn : MainAPI() {
             val json = LinkData(
                 type = type,
                 post = post,
-                nume = numeAttr
+                nume = nume
             ).toJson()
 
             newEpisode(json) {
