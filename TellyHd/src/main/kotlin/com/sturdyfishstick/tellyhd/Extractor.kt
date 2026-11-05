@@ -17,21 +17,23 @@ class Vidsp : VidhideExtractor() {
 class VidHideplus : VidhideExtractor() {
     override var mainUrl = "https://vidhideplus.com"
 }
-class VidHidedht: VidhideExtractor() {
+
+class VidHidedht : VidhideExtractor() {
     override var mainUrl = "https://dhtpre.com"
 }
 
 class Vidhidehub : VidhideExtractor() {
     override var mainUrl = "https://vidhidehub.com"
 }
+
 class Vidhidetoul : VidhideExtractor() {
     override var mainUrl = "https://toul.hair"
 }
+
 class Xtapes : VidhideExtractor() {
     override var mainUrl = "https://xtapes.porn"
     override var name = "Xtapes"
 }
-
 
 class Luluvid : LuluStream() {
     override val name = "Lulustream"
@@ -48,9 +50,9 @@ open class Ds2play : ExtractorApi() {
     }
 
     override suspend fun getUrl(url: String, referer: String?): List<ExtractorLink>? {
-        val response0 = app.get(url).text // html of DoodStream page to look for /pass_md5/...
-        val md5 =mainUrl+(Regex("/pass_md5/[^']*").find(response0)?.value ?: return null)  // get https://dood.ws/pass_md5/...
-        val trueUrl = app.get(md5, referer = url).text + "zUEJeL3mUN?token=" + md5.substringAfterLast("/")   //direct link to extract  (zUEJeL3mUN is random)
+        val response0 = app.get(url).text
+        val md5 = mainUrl + (Regex("/pass_md5/[^']*").find(response0)?.value ?: return null)
+        val trueUrl = app.get(md5, referer = url).text + "zUEJeL3mUN?token=" + md5.substringAfterLast("/")
         val quality = Regex("\\d{3,4}p").find(response0.substringAfter("<title>").substringBefore("</title>"))?.groupValues?.get(0)
         return listOf(
             newExtractorLink(
@@ -61,8 +63,7 @@ open class Ds2play : ExtractorApi() {
                 this.referer = mainUrl
                 this.quality = getQualityFromName(quality)
             }
-        ) // links are valid in 8h
-
+        )
     }
 }
 
@@ -75,20 +76,20 @@ open class Bigwarp : ExtractorApi() {
         url: String,
         referer: String?,
     ): List<ExtractorLink>? {
-        val response =app.get(url).document
+        val response = app.get(url).document
         val script = response.selectFirst("script:containsData(sources)")?.data().toString()
-        Regex("sources:\\s*\\[.file:\"(.*)\".*").find(script)?.groupValues?.get(1)?.let { link ->
-                return listOf(
-                    newExtractorLink(
-                        source = name,
-                        name = name,
-                        url = link,
-                        INFER_TYPE
-                    ) {
-                        this.referer = referer ?: "$mainUrl/"
-                        this.quality = Qualities.P1080.value
-                    }
-                )
+        Regex("sources:\\s*\\[\\s*\\{\\s*file:\\s*\"([^\"]+)\"").find(script)?.groupValues?.get(1)?.let { link ->
+            return listOf(
+                newExtractorLink(
+                    source = name,
+                    name = name,
+                    url = link,
+                    INFER_TYPE
+                ) {
+                    this.referer = referer ?: "$mainUrl/"
+                    this.quality = Qualities.P1080.value
+                }
+            )
         }
         return null
     }
