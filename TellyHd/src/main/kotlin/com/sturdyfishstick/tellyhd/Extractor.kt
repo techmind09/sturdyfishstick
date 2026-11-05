@@ -41,10 +41,31 @@ class Luluvid : LuluStream() {
     override val mainUrl = "https://luluvid.com"
 }
 
-// Yeh Filemoon extractor naya add kiya gaya hai taaki cdntelly streams play ho sakein
-class Filemoon : FileMoon() {
-    override var mainUrl = "https://filemoon.sx"
+// Filemoon ko direct ExtractorApi ki tarah handle kiya gaya hai taaki final class error na aaye
+class Filemoon : ExtractorApi() {
     override var name = "Filemoon"
+    override var mainUrl = "https://filemoon.sx"
+    override val requiresReferer = false
+
+    override suspend fun getUrl(url: String, referer: String?): List<ExtractorLink>? {
+        val doc = app.get(url).document
+        val script = doc.selectFirst("script:containsData(eval)")?.data().toString()
+        // Fallback standard link extraction for Filemoon / CDNTelly
+        val link = doc.selectFirst("meta[property=og:video]")?.attr("content") 
+            ?: Regex("file:\\s*\"([^\"]+)\"").find(script)?.groupValues?.get(1) ?: return null
+        
+        return listOf(
+            newExtractorLink(
+                source = name,
+                name = name,
+                url = link,
+                INFER_TYPE
+            ) {
+                this.referer = url
+                this.quality = Qualities.P1080.value
+            }
+        )
+    }
 }
 
 open class Ds2play : ExtractorApi() {
