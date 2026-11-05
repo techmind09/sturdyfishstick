@@ -457,7 +457,7 @@ class TellyHDEn : MainAPI() {
                 source = name,
                 name = name,
                 url = streamUrl,
-                type = if (streamUrl.contains(".m3u8", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.Url
+                type = ExtractorLinkType.M3U8
             ) {
                 this.referer = iframe
                 this.quality = Qualities.Unknown.value
