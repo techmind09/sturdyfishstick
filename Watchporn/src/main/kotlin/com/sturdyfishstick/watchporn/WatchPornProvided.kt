@@ -10,7 +10,7 @@ class WatchPorn : MainAPI() {
     override var mainUrl = "https://watchporn.to"
     override var name = "WatchPorn"
     override val hasMainPage = true
-    override var lang = "hi"
+    override var lang = "en"
     override val hasQuickSearch = false
     override val supportedTypes = setOf(TvType.NSFW)
 
@@ -126,6 +126,17 @@ class WatchPorn : MainAPI() {
         val response = app.get(data)
         val pageHtml = response.text
         val cookies = response.cookies
+
+        // Extract subtitles if embedded in page html/player source
+        val subRegex = Regex("""file:\s*"([^"]+\.(?:vtt|srt))"""")
+        subRegex.findAll(pageHtml).forEach { match ->
+            val subUrl = fixUrlNull(match.groupValues[1])
+            if (subUrl != null) {
+                subtitleCallback.invoke(
+                    SubtitleFile("English", subUrl)
+                )
+            }
+        }
 
         return KtPlayerExtractor.getLinks(
             sourceName = name,
