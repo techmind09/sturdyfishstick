@@ -4,6 +4,7 @@ import org.jsoup.nodes.Element
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
+import com.lagradost.cloudstream3.subtitles.GoogleTranslate
 import java.net.URLEncoder
 
 class BrazzPW : MainAPI() {
@@ -96,14 +97,14 @@ class BrazzPW : MainAPI() {
 
         val title         = document.selectFirst("h1.entry-title")?.text()?.trim()?.ifEmpty { null } ?: return null
         val poster        = fixUrlNull(document.selectFirst("meta[itemprop=thumbnailUrl]")?.attr("content")?.ifEmpty { null })
-        val description     = document.selectFirst("div.video-description p")?.text()?.trim()?.ifEmpty { null }
+        val description   = document.selectFirst("div.video-description p")?.text()?.trim()?.ifEmpty { null }
         val year          = document.selectFirst("meta[itemprop=uploadDate]")?.attr("content")?.let { Regex("""\d+""").find(it)?.value?.toIntOrNull() }
         val tags          = document.select("div.tags-list a").map { it.text().trim() }.filter { it.isNotBlank() }.distinct()
-        val scoreVal        = document.selectFirst("div.percentage")?.text()?.trim()?.removeSuffix("%")?.toDoubleOrNull()
-        val duration        = document.selectFirst("meta[itemprop=duration]")?.attr("content")?.let { Regex("""(\d+)M""").find(it)?.groupValues?.get(1)?.toIntOrNull() }
+        val scoreVal      = document.selectFirst("div.percentage")?.text()?.trim()?.removeSuffix("%")?.toDoubleOrNull()
+        val duration      = document.selectFirst("meta[itemprop=duration]")?.attr("content")?.let { Regex("""(\d+)M""").find(it)?.groupValues?.get(1)?.toIntOrNull() }
         val recommendations = document.select("div.under-video-block article.loop-video").mapNotNull { it.toCardResult() }
-        val actors          = document.select("div#video-actors a").map { it.text().trim() }.filter { it.isNotBlank() }.distinct()
-        val iframe          = fixUrlNull(document.selectFirst("iframe[name=player]")?.attr("src")?.ifEmpty { null })
+        val actors        = document.select("div#video-actors a").map { it.text().trim() }.filter { it.isNotBlank() }.distinct()
+        val iframe        = fixUrlNull(document.selectFirst("iframe[name=player]")?.attr("src")?.ifEmpty { null })
 
         return newMovieLoadResponse(title, url, TvType.NSFW, iframe ?: url) {
             this.posterUrl       = poster
@@ -127,6 +128,29 @@ class BrazzPW : MainAPI() {
             app.get(data).document.selectFirst("iframe[name=player]")?.attr("src")?.ifEmpty { null }
         ) ?: return false
         val pageText  = app.get(playerUrl, referer = "$mainUrl/").text
+        
+        // Extract Subtitles from Player JavaScript if present
+        val subRegex = Regex("""file:\s*"([^"]+\.(?:vtt|srt))"""")
+        subRegex.findAll(pageText).forEach { match ->
+            val subUrl = fixUrlNull(match.groupValues[1])
+            if (subUrl != null) {
+                // Primary Subtitle (English/Default)
+                subtitleCallback.invoke(
+                    SubtitleFile("English", subUrl)
+                )
+                
+                // Add Google Translate Subtitle Option (Hindi / Targeted Language)
+                try {
+                    val translatedUrl = GoogleTranslate.getTranslateUrl(subUrl, "hi") // "hi" = Hindi, change to "en" / target lang
+                    subtitleCallback.invoke(
+                        SubtitleFile("Google Translate (Hindi)", translatedUrl)
+                    )
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+
         val m3u8Path  = Regex("""src:\s*"([^"]+)"""").find(pageText)?.groupValues?.get(1)?.ifEmpty { null } ?: return false
         val m3u8Url   = when {
             m3u8Path.startsWith("http") -> m3u8Path
