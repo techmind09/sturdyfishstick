@@ -4,7 +4,6 @@ import org.jsoup.nodes.Element
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
-import com.lagradost.cloudstream3.subtitles.GoogleTranslate
 import java.net.URLEncoder
 
 class BrazzPW : MainAPI() {
@@ -129,25 +128,14 @@ class BrazzPW : MainAPI() {
         ) ?: return false
         val pageText  = app.get(playerUrl, referer = "$mainUrl/").text
         
-        // Extract Subtitles from Player JavaScript if present
+        // Native Subtitles extraction if available on source player
         val subRegex = Regex("""file:\s*"([^"]+\.(?:vtt|srt))"""")
         subRegex.findAll(pageText).forEach { match ->
             val subUrl = fixUrlNull(match.groupValues[1])
             if (subUrl != null) {
-                // Primary Subtitle (English/Default)
                 subtitleCallback.invoke(
                     SubtitleFile("English", subUrl)
                 )
-                
-                // Add Google Translate Subtitle Option (Hindi / Targeted Language)
-                try {
-                    val translatedUrl = GoogleTranslate.getTranslateUrl(subUrl, "hi") // "hi" = Hindi, change to "en" / target lang
-                    subtitleCallback.invoke(
-                        SubtitleFile("Google Translate (Hindi)", translatedUrl)
-                    )
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
             }
         }
 
