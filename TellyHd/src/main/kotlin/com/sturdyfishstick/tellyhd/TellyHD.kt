@@ -34,12 +34,14 @@ class TellyHD : MainAPI() {
 
     private val headers = mapOf(
         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
+        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Cookie" to "starstruck_4289ff7218d92faf1c44febfd9fb83db=870407aa807d1633f1b22a1e380ec2e2"
     )
 
     private val playerHeaders = mapOf(
         "User-Agent" to headers["User-Agent"]!!,
-        "Accept" to "*/*"
+        "Accept" to "*/*",
+        "Referer" to "$mainUrl/"
     )
 
     override val mainPage = mainPageOf(
