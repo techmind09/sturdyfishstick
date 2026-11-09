@@ -13,9 +13,9 @@ import kotlinx.coroutines.sync.withLock
 
 class PrmoviesProvider : MainAPI() {
     override var mainUrl = "https://prmovies.ventures"
-    override var name = "Prmovies"
+    override var name = "PrmoviesIndian"
     override val hasMainPage = true
-    override var lang = "en"
+    override var lang = "hi"
     override val hasDownloadSupport = false
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
