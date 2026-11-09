@@ -15,6 +15,7 @@ import com.lagradost.cloudstream3.app
 class XPrimeHubProvider: Plugin() {
     override fun load(context: Context) {
         registerMainAPI(XPrimeHub())
+        registerMainAPI(PrmoviesProvider())
         registerExtractorAPI(PixelDrain())
         registerExtractorAPI(FastDL())
         registerExtractorAPI(VCloud())
