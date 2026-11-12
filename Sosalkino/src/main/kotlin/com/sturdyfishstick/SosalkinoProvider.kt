@@ -1,4 +1,4 @@
-package com.hungrysturdy.sosalkino
+package com.sturdyfishstick.sosalkino
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
@@ -8,7 +8,7 @@ class SosalkinoProvider : MainAPI() {
     override var mainUrl = "https://m1.sosalkino.app"
     override var name = "Sosalkino"
     override val hasMainPage = true
-    override var lang = "en"
+    override var lang = "ru"
     override val supportedTypes = setOf(TvType.NSFW)
 
     // User session cookies captured from browser/app session
@@ -129,7 +129,7 @@ class SosalkinoProvider : MainAPI() {
             val src = element.attr("src").ifEmpty { element.attr("data-src") }
             if (src.isNotEmpty() && (src.contains(".mp4") || src.contains("get_file"))) {
                 callback.invoke(
-                    ExtractorLink(
+                    newExtractorLink(
                         source = name,
                         name = name,
                         url = fixUrl(src),
@@ -151,7 +151,7 @@ class SosalkinoProvider : MainAPI() {
         urls.forEachIndexed { index, streamUrl ->
             val qualityStr = qualities.getOrNull(index) ?: ""
             callback.invoke(
-                ExtractorLink(
+                newExtractorLink(
                     source = name,
                     name = "$name $qualityStr".trim(),
                     url = fixUrl(streamUrl),
