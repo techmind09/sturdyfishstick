@@ -8,7 +8,7 @@ class SosalkinoProvider : MainAPI() {
     override var mainUrl = "https://m1.sosalkino.app"
     override var name = "Sosalkino"
     override val hasMainPage = true
-    override var lang = "ru"
+    override var lang = "en"
     override val supportedTypes = setOf(TvType.NSFW)
 
     // User session cookies captured from browser/app session
