@@ -1,4 +1,4 @@
-package com.sturdyfishstick.sosalkino
+package com.sturdyfishstick
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
@@ -129,13 +129,14 @@ class SosalkinoProvider : MainAPI() {
             val src = element.attr("src").ifEmpty { element.attr("data-src") }
             if (src.isNotEmpty() && (src.contains(".mp4") || src.contains("get_file"))) {
                 callback.invoke(
-                    newExtractorLink(
+                    ExtractorLink(
                         source = name,
                         name = name,
                         url = fixUrl(src),
                         referer = mainUrl,
                         quality = Qualities.Unknown.value,
-                        isM3u8 = src.contains(".m3u8")
+                        // Bypasses the deprecated 'isM3u8' constructor by using the new ExtractorLinkType enum
+                        type = if (src.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                     )
                 )
             }
@@ -151,13 +152,13 @@ class SosalkinoProvider : MainAPI() {
         urls.forEachIndexed { index, streamUrl ->
             val qualityStr = qualities.getOrNull(index) ?: ""
             callback.invoke(
-                newExtractorLink(
+                ExtractorLink(
                     source = name,
                     name = "$name $qualityStr".trim(),
                     url = fixUrl(streamUrl),
                     referer = data,
                     quality = getQualityFromName(qualityStr),
-                    isM3u8 = streamUrl.contains(".m3u8")
+                    type = if (streamUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                 )
             )
         }
