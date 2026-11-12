@@ -1,4 +1,4 @@
-package com.sturdyfishstick.sosalkino
+package com.sturdyfishstick
 
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
