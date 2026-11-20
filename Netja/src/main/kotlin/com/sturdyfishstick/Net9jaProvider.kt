@@ -80,13 +80,11 @@ class Net9jaProvider : MainAPI() {
     ): Boolean {
         val movieDoc = app.get(data).document
 
-        // Step 1: Movie page se dldownload.com.ng ya download button link nikalna
         val dlPageUrl = movieDoc.select("a[href*='dldownload.com.ng'], a.button, a.sdm_download, a[href*='xxxmoviesdl.net']")
             .mapNotNull { fixUrlNull(it.attr("href")) }
             .firstOrNull { it.contains("dldownload") || it.contains("xxxmoviesdl") || it.contains("sdm_downloads") }
             ?: return false
 
-        // Step 2: Agar link dldownload.com.ng ka hai toh wahan se xxxmoviesdl.net ka link nikalna
         val finalPageUrl = if (dlPageUrl.contains("dldownload.com.ng") || dlPageUrl.contains("sdm_downloads")) {
             val dlDoc = app.get(dlPageUrl, referer = data).document
             dlDoc.select("a.sdm_download, a[href*='xxxmoviesdl.net/dl/']")
@@ -97,15 +95,13 @@ class Net9jaProvider : MainAPI() {
             dlPageUrl
         }
 
-        // Step 3: xxxmoviesdl.net page se "?download=1" (867 MB) link aur label nikalna
         val xxxDoc = app.get(finalPageUrl, referer = dlPageUrl).document
         val downloadBtn = xxxDoc.selectFirst("a.btn.btn-primary[href*='download=1'], a[href*='?download=1']")
             ?: return false
 
         val downloadTriggerUrl = fixUrl(downloadBtn.attr("href"))
-        val btnText = downloadBtn.text().trim() // e.g., "Download (867 MB)"
+        val btnText = downloadBtn.text().trim()
 
-        // Step 4: Final stream/download URL resolve karna (redirect follow karke)
         val response = app.get(
             downloadTriggerUrl,
             referer = finalPageUrl,
@@ -116,12 +112,18 @@ class Net9jaProvider : MainAPI() {
             ?: app.get(downloadTriggerUrl, referer = finalPageUrl).url
 
         if (streamUrl.isNotBlank()) {
+            val linkType = if (streamUrl.contains(".m3u8", ignoreCase = true)) {
+                ExtractorLinkType.M3U8
+            } else {
+                ExtractorLinkType.VIDEO
+            }
+
             callback.invoke(
                 newExtractorLink(
                     source = name,
                     name = if (btnText.isNotBlank()) "$name - $btnText" else name,
                     url = streamUrl,
-                    isM3u8 = streamUrl.contains(".m3u8", ignoreCase = true)
+                    type = linkType
                 ) {
                     this.referer = finalPageUrl
                     this.quality = Qualities.Unknown.value
