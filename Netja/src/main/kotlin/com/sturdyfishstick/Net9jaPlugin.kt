@@ -1,4 +1,4 @@
-package com.sturdyfishstick.taboodaddy
+package com.sturdyfishstick.netja
 
 import android.content.Context
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
