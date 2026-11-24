@@ -52,9 +52,72 @@ class WatchOMoviesProvider : MainAPI() {
         return response.code in listOf(403, 503)
     }
 
+    private val defaultMainPage = mainPageOf(
+        "" to "Latest Updates",
+        "movies" to "Movies",
+        "genre/brazzers" to "Brazzers",
+        "genre/bangbros" to "Bangbros",
+        "genre/naughty-america" to "Naughty America",
+        "genre/reality-kings" to "Reality Kings",
+        "genre/vixen" to "Vixen",
+        "genre/wicked-pictures" to "Wicked Pictures",
+        "genre/evil-angel" to "Evil Angel",
+        "genre/teamskeet" to "Teamskeet",
+        "genre/digital-playground" to "Digital Playground",
+        "genre/twistys" to "Twistys",
+        "genre/marc-dorcel" to "Marc Dorcel",
+        "genre/jules-jordan-video" to "Jules Jordan Video",
+        "genre/new-sensations" to "New Sensations",
+        "genre/ddf-network" to "DDF Network",
+        "genre/mofos" to "Mofos",
+        "genre/elegant-angel" to "Elegant Angel",
+        "genre/fakehub" to "FakeHub",
+        "genre/faketaxi" to "FakeTaxi",
+        "genre/girlsway" to "GirlsWay",
+        "genre/mylf" to "MYLF",
+        "director/ullu-originals" to "Ullu Originals",
+        "director/fliz-movies" to "Fliz Movies",
+        "director/nuefliks" to "Nuefliks",
+        "director/hotshots" to "Hotshots",
+        "director/hunters" to "Hunters",
+        "director/moodx-originals" to "MoodX",
+        "director/voovi" to "VooVi",
+        "director/primeplay" to "PrimePlay",
+        "director/besharams" to "Besharams",
+        "director/kooku" to "Kooku",
+        "director/gupchup" to "Gupchup",
+        "director/feneomovies" to "Feneomovies",
+        "director/cinemadosti" to "Cinemadosti",
+        "director/primeflix" to "Primeflix",
+        "director/gemplex" to "Gemplex",
+        "director/rabbit" to "Rabbit",
+        "director/hotmasti" to "HotMasti",
+        "director/mastiprime" to "MastiPrime",
+        "director/ek-night-show" to "Ek Night Show",
+        "director/flixskmovies" to "Flixskmovies",
+        "director/lootlo" to "Lootlo",
+        "director/hootzy" to "Hootzy",
+        "director/balloons" to "Balloons",
+        "director/big-movie-zoo" to "Big Movie Zoo",
+        "director/bambooflix" to "Bambooflix",
+        "director/piliflix" to "Piliflix",
+        "director/11upmovies" to "11upmovies",
+        "director/eightshots" to "Eightshots",
+        "director/i-entertainment" to "I-Entertainment",
+        "director/hotprime" to "Hotprime",
+        "director/bananaprime" to "BananaPrime",
+        "director/chikooflix" to "Chikooflix",
+        "director/glamheart" to "Glamheart",
+        "director/worldprime" to "Worldprime"
+    )
+
     override val mainPage: List<MainPageData>
-        get() = WatchOMoviesSettingsDialog.getActiveCategories().map { cat ->
-            MainPageData(name = cat.name, data = cat.path)
+        get() {
+            val activeFromSettings = WatchOMoviesSettingsDialog.getActiveCategories()
+                .map { MainPageData(name = it.name, data = it.path) }
+            val knownPaths = WatchOMoviesSettingsDialog.ALL_CATEGORIES.map { it.path }.toSet()
+            val extraFromProvider = defaultMainPage.filter { it.data !in knownPaths }
+            return (activeFromSettings + extraFromProvider).ifEmpty { defaultMainPage }
         }
 
     private suspend fun getPage(url: String, referer: String? = null): NiceResponse? {
