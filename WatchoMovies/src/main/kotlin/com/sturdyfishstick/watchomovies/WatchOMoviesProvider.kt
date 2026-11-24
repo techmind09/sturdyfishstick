@@ -14,6 +14,7 @@ import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.nicehttp.NiceResponse
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.sync.Mutex
@@ -21,13 +22,13 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import org.jsoup.Jsoup
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URL
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.util.Calendar
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 class WatchOMoviesProvider : MainAPI() {
     override var mainUrl              = "https://watchomovies.social"
@@ -49,6 +50,8 @@ class WatchOMoviesProvider : MainAPI() {
 
     private val cfMutexMap = ConcurrentHashMap<String, Mutex>()
     private val cfKillerMap = ConcurrentHashMap<String, CloudflareKiller>()
+    private val hostFailCounts = ConcurrentHashMap<String, AtomicInteger>()
+    private val hostDeadUntil = ConcurrentHashMap<String, Long>()
 
     fun applySavedSettings() {
         mainUrl = WatchOMoviesSettingsDialog.getServerDomain("watchomovies")
@@ -57,6 +60,8 @@ class WatchOMoviesProvider : MainAPI() {
     fun clearCfCache() {
         cfKillerMap.values.forEach { runCatching { it.savedCookies.clear() } }
         cfKillerMap.clear()
+        hostFailCounts.clear()
+        hostDeadUntil.clear()
     }
 
     private fun mutexFor(url: String): Mutex =
@@ -71,16 +76,33 @@ class WatchOMoviesProvider : MainAPI() {
     private fun srvBase(serverKey: String): String =
         WatchOMoviesSettingsDialog.getServerDomain(serverKey)
 
-    private fun encodeRoute(serverKey: String, url: String): String =
-        "srv:$serverKey|$url"
+    /**
+     * Valid https:// URL route so CloudStream's fixUrl() NEVER prepends mainUrl!
+     */
+    private fun encodeRoute(serverKey: String, payload: String): String {
+        val enc = URLEncoder.encode(payload, "UTF-8")
+        return "https://wom.internal/$serverKey?u=$enc"
+    }
 
     private fun decodeRoute(raw: String): Pair<String, String> {
-        if (raw.startsWith("srv:")) {
-            val rest = raw.removePrefix("srv:")
-            val key = rest.substringBefore("|")
-            val url = rest.substringAfter("|", "")
-            if (key.isNotBlank() && url.isNotBlank()) return key to url
+        val cleaned = raw.substringAfter("watchomovies.social/").takeIf {
+            raw.contains("watchomovies.social/srv:") || raw.contains("wom.internal/")
+        } ?: raw
+
+        if (cleaned.contains("wom.internal/")) {
+            val uri = Uri.parse(cleaned)
+            val key = uri.pathSegments.firstOrNull().orEmpty()
+            val payload = uri.getQueryParameter("u").orEmpty()
+            if (key.isNotBlank()) return key to payload
         }
+
+        if (cleaned.startsWith("srv:")) {
+            val rest = cleaned.removePrefix("srv:")
+            val key = rest.substringBefore("|")
+            val payload = rest.substringAfter("|", "")
+            if (key.isNotBlank()) return key to payload
+        }
+
         val low = raw.lowercase()
         val matched = WatchOMoviesSettingsDialog.SERVERS.firstOrNull { srv ->
             val domHost = srvBase(srv.key).substringAfter("://").substringBefore("/").removePrefix("www.").lowercase()
@@ -90,6 +112,13 @@ class WatchOMoviesProvider : MainAPI() {
     }
 
     private suspend fun getPage(url: String, referer: String? = null, extraHeaders: Map<String, String> = emptyMap()): NiceResponse? {
+        val host = try { Uri.parse(url).host?.lowercase().orEmpty() } catch (e: Exception) { "" }
+        val now = System.currentTimeMillis()
+        val deadUntil = hostDeadUntil[host] ?: 0L
+        if (host.isNotBlank() && now < deadUntil) {
+            return null
+        }
+
         return try {
             val headers = browserHeaders.toMutableMap()
             headers.putAll(extraHeaders)
@@ -97,16 +126,22 @@ class WatchOMoviesProvider : MainAPI() {
                 headers["Cookie"] = it
             }
 
-            val response = app.get(url, headers = headers, referer = referer)
+            val timeoutSec = WatchOMoviesSettingsDialog.getTimeoutSeconds().toLong()
+            val response = app.get(url, headers = headers, referer = referer, timeout = timeoutSec)
+            if (host.isNotBlank()) {
+                hostFailCounts[host]?.set(0)
+                hostDeadUntil.remove(host)
+            }
+
             if (!isCloudflarePage(response)) {
                 response
             } else if (WatchOMoviesSettingsDialog.isCfAutoRetry()) {
                 mutexFor(url).withLock {
                     val cfKiller = killerFor(url)
-                    val retryResponse = app.get(url, headers = headers, interceptor = cfKiller, referer = referer)
+                    val retryResponse = app.get(url, headers = headers, interceptor = cfKiller, referer = referer, timeout = timeoutSec)
                     if (isCloudflarePage(retryResponse)) {
                         cfKiller.savedCookies.clear()
-                        app.get(url, headers = headers, interceptor = cfKiller, referer = referer)
+                        app.get(url, headers = headers, interceptor = cfKiller, referer = referer, timeout = timeoutSec)
                     } else {
                         retryResponse
                     }
@@ -115,8 +150,16 @@ class WatchOMoviesProvider : MainAPI() {
                 WatchOMoviesSettingsDialog.logDiag("CF", "Blocked (${response.code}): $url")
                 response
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            WatchOMoviesSettingsDialog.logDiag("ERROR", "$url -> ${e.message}")
+            val fails = if (host.isNotBlank()) hostFailCounts.getOrPut(host) { AtomicInteger(0) }.incrementAndGet() else 1
+            if (fails == 2 && host.isNotBlank()) {
+                hostDeadUntil[host] = System.currentTimeMillis() + 60_000L
+                WatchOMoviesSettingsDialog.logDiag("TIMEOUT", "$host unreachable — paused 60s (${e.message})")
+            } else if (fails < 2) {
+                WatchOMoviesSettingsDialog.logDiag("ERROR", "$url -> ${e.message}")
+            }
             null
         }
     }
@@ -520,10 +563,12 @@ class WatchOMoviesProvider : MainAPI() {
         get() {
             val enabledServers = WatchOMoviesSettingsDialog.getOrderedEnabledServers()
                 .ifEmpty { listOf(WatchOMoviesSettingsDialog.SERVERS.first()) }
+            val limit = WatchOMoviesSettingsDialog.getRowsPerServer()
 
             val rows = mutableListOf<MainPageData>()
             enabledServers.forEach { srv ->
-                val cats = serverCategoryMap[srv.key].orEmpty()
+                val allCats = serverCategoryMap[srv.key].orEmpty()
+                val cats = if (limit >= 60) allCats else allCats.take(limit)
                 cats.forEach { (path, label) ->
                     rows.add(
                         MainPageData(
@@ -649,13 +694,18 @@ class WatchOMoviesProvider : MainAPI() {
             enabledServers.map { srv ->
                 async {
                     sem.withPermit {
-                        runCatching { searchSingleServer(srv.key, query.trim(), page) }.getOrDefault(emptyList())
+                        try {
+                            searchSingleServer(srv.key, query.trim(), page)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            emptyList()
+                        }
                     }
                 }
             }.awaitAll()
         }
 
-        // Interleave results across servers so top hits from every server appear first
         val merged = mutableListOf<SearchResponse>()
         val maxLen = lists.maxOfOrNull { it.size } ?: 0
         for (i in 0 until maxLen) {
@@ -797,7 +847,6 @@ class WatchOMoviesProvider : MainAPI() {
         }
     }
 
-    // 1. WatchOMovies Card Parser
     private fun extractWatchOMoviesItems(html: String, base: String): List<SearchResponse> {
         val doc = Jsoup.parse(html)
         val items = mutableListOf<SearchResponse>()
@@ -853,7 +902,6 @@ class WatchOMoviesProvider : MainAPI() {
         return items.distinctBy { it.url }
     }
 
-    // 2. TellyHD Helpers
     private fun tellyHeaders(): Map<String, String> = mapOf(
         "Cookie" to "starstruck_4289ff7218d92faf1c44febfd9fb83db=870407aa807d1633f1b22a1e380ec2e2"
     )
@@ -897,7 +945,6 @@ class WatchOMoviesProvider : MainAPI() {
         }
     }
 
-    // 3. BrazzPW Card Parser
     private fun Element.toBrazzPwResult(base: String, prefixTag: Boolean = false): SearchResponse? {
         val link = selectFirst("a") ?: return null
         val href = resolveFullUrl(base, link.attr("href")) ?: return null
@@ -912,7 +959,6 @@ class WatchOMoviesProvider : MainAPI() {
         }
     }
 
-    // 4. XMoviesForYou Card Parser
     private fun Element.toXMoviesResult(base: String, prefixTag: Boolean = false): SearchResponse? {
         val rawTitle = selectFirst("h3")?.text()?.trim() ?: return null
         val cleanTitle = rawTitle.replace(Regex("""\[.*?\]"""), "").trim()
@@ -925,7 +971,6 @@ class WatchOMoviesProvider : MainAPI() {
         }
     }
 
-    // 5. XXXTime Card Parser
     private fun Element.toXXXTimeResult(base: String, prefixTag: Boolean = false): SearchResponse? {
         val rawTitle = selectFirst("h3")?.text()?.trim() ?: return null
         val title = if (prefixTag) "[XXXTime] $rawTitle" else rawTitle
@@ -938,7 +983,6 @@ class WatchOMoviesProvider : MainAPI() {
         }
     }
 
-    // 6. WatchPorn Card Parser
     private fun Element.toWatchPornResult(base: String, prefixTag: Boolean = false): SearchResponse? {
         val rawTitle = selectFirst("a.wp-card__link")?.attr("title")?.trim()?.ifEmpty { null } ?: return null
         val title = if (prefixTag) "[WatchPorn] $rawTitle" else rawTitle
@@ -953,7 +997,6 @@ class WatchOMoviesProvider : MainAPI() {
         }
     }
 
-    // 7. Taboodaddy Card Parser
     private fun Element.toTabooDaddyResult(base: String, prefixTag: Boolean = false): SearchResponse? {
         val a = selectFirst("a.thumb[href], a[href]") ?: return null
         val href = a.attr("href").trim()
@@ -971,7 +1014,6 @@ class WatchOMoviesProvider : MainAPI() {
         }
     }
 
-    // 8. Pvzija (BluMovies) Card Parser
     private fun Element.toPvzijaResult(base: String, prefixTag: Boolean = false): SearchResponse? {
         val href = resolveFullUrl(base, selectFirst("a[href]")?.attr("href")) ?: return null
         val rawTitle = selectFirst("div.card__b h2")?.text()?.trim()?.ifBlank { null }
@@ -987,7 +1029,6 @@ class WatchOMoviesProvider : MainAPI() {
         }
     }
 
-    // 9. Free Porn Videos Card Parser
     private fun Element.toFreePornResult(base: String, prefixTag: Boolean = false): SearchResponse? {
         if (selectFirst("div.img iframe") != null) return null
         val linkElement = selectFirst("a.thumb_title") ?: return null
@@ -1291,7 +1332,11 @@ class WatchOMoviesProvider : MainAPI() {
                 }
             )
             true
-        } catch (e: Exception) { false }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private suspend fun resolveVidsrc(embedUrl: String, base: String, referer: String, callback: (ExtractorLink) -> Unit): Boolean {
@@ -1312,7 +1357,11 @@ class WatchOMoviesProvider : MainAPI() {
                 }
             )
             true
-        } catch (e: Exception) { false }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private suspend fun loadLinksTellyHd(
@@ -1578,4 +1627,3 @@ class WatchOMoviesProvider : MainAPI() {
         return found
     }
 }
-
