@@ -1,4 +1,4 @@
-package com.sturdyfishstick.watchomoviesindian
+package com.sturdyfishstick.watchomovies
 
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -35,8 +35,11 @@ import android.widget.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -44,30 +47,43 @@ import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 object WatchOMoviesSettingsDialog {
 
     const val LOG_TAG = "WatchOMoviesDiag"
-    const val DEFAULT_DOMAIN = "https://watchomovies.social"
-    private const val PREFS_NAME = "watchomovies_ultra_v1"
+    private const val PREFS_NAME = "watchomovies_master_ultra_v2"
     private const val CF_VERIFIED_MARKER = "__CF_VERIFIED__"
 
-    private const val KEY_CUSTOM_DOMAIN = "wom_custom_domain"
-    private const val KEY_THEME = "wom_ui_theme"
-    private const val KEY_CAT_PREFIX = "wom_cat_"
-    private const val KEY_CAT_ORDER = "wom_cat_order_csv"
-    private const val KEY_GRP_GENERAL = "wom_grp_general"
-    private const val KEY_GRP_INDIAN_OTT = "wom_grp_indian_ott"
-    private const val KEY_GRP_STUDIOS = "wom_grp_studios"
-    private const val KEY_SHUFFLE_HOME = "wom_shuffle_home"
+    private const val KEY_SRV_PREFIX = "wom_srv_"
+    private const val KEY_DOMAIN_PREFIX = "wom_dom_"
+    private const val KEY_EXT_PREFIX = "wom_ext_"
+    private const val KEY_SRV_ORDER = "wom_srv_order_csv"
     private const val KEY_CF_COOKIES = "wom_cf_cookies_json"
     private const val KEY_USE_WEBVIEW_CF = "wom_use_webview_cf"
     private const val KEY_CF_AUTO_RETRY = "wom_cf_auto_retry"
+    private const val KEY_THEME = "wom_ui_theme"
+
+    // Category Group Filters
+    private const val KEY_GRP_INDIAN_OTT = "wom_grp_indian_ott"
+    private const val KEY_GRP_STUDIOS = "wom_grp_studios"
+    private const val KEY_GRP_TUBES = "wom_grp_tubes"
+    private const val KEY_HINDI_ONLY = "wom_hindi_only"
+    private const val KEY_SHUFFLE_HOME = "wom_shuffle_home"
+
+    // Quality & Performance
+    private const val KEY_Q_4K = "wom_q_4k"
+    private const val KEY_Q_1080 = "wom_q_1080"
+    private const val KEY_Q_720 = "wom_q_720"
+    private const val KEY_Q_480 = "wom_q_480"
+    private const val KEY_CONCURRENCY = "wom_concurrency"
+    private const val KEY_TIMEOUT_SEC = "wom_timeout_sec"
 
     const val CF_BYPASS_UA =
-        "Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36"
+        "Mozilla/5.0 (Linux; Android 15; Infinix X6851) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
 
     data class ThemePalette(
         val id: String,
@@ -86,16 +102,25 @@ object WatchOMoviesSettingsDialog {
         ThemePalette("amber", "Gold Amber", "#D97706", "#211608", "#2E1C0A", "#1A1423")
     )
 
-    data class CategoryItem(
+    data class ServerItem(
         val key: String,
-        val path: String,
         val name: String,
-        val group: String, // General, Indian OTT, Studios 18+
         val tag: String,
-        val accentHex: String
+        val defaultUrl: String,
+        val accentHex: String,
+        val isHindi: Boolean,
+        val category: String // Indian OTT, Studios 18+, Tubes
     )
 
-    data class DomainHealthInfo(
+    data class ExtractorItem(
+        val key: String,
+        val name: String,
+        val hosts: String,
+        val tag: String
+    )
+
+    data class ServerHealthInfo(
+        val key: String,
         val status: String,
         val isHealthy: Boolean,
         val httpCode: Int = 0,
@@ -104,77 +129,40 @@ object WatchOMoviesSettingsDialog {
         val updatedAt: String = ""
     )
 
-    val ALL_CATEGORIES = listOf(
-        // General
-        CategoryItem("latest", "", "Latest Updates", "General", "HOME", "#38BDF8"),
-        CategoryItem("movies", "movies", "Movies", "General", "MOVIES", "#22D3EE"),
+    val SERVERS = listOf(
+        ServerItem("watchomovies", "WatchOMovies", "OTT/HLS", "https://watchomovies.social", "#F43F5E", true, "Indian OTT"),
+        ServerItem("tellyhd", "TellyHD Indian", "DOO/M3U8", "https://tellyhd.eu", "#FB7185", true, "Indian OTT"),
+        ServerItem("brazzpw", "BrazzPW", "HLS/SUB", "https://brazzpw.xyz", "#38BDF8", false, "Studios 18+"),
+        ServerItem("xmoviesforyou", "XMoviesForYou", "STUDIOS", "https://xmoviesforyou.com", "#A855F7", false, "Studios 18+"),
+        ServerItem("xxxtime", "XXXTime", "LULU/M3U8", "https://xxxtime.video", "#F59E0B", false, "Tubes"),
+        ServerItem("watchporn", "WatchPorn", "KT/MP4", "https://watchporn.to", "#10B981", false, "Studios 18+"),
+        ServerItem("taboodaddy", "Taboodaddy", "TWIMG/HLS", "https://taboodaddy.com", "#EC4899", false, "Studios 18+"),
+        ServerItem("pvzija", "Pvzija (BluMovies)", "CF/MULTI", "https://xxxparodyhd.net", "#22D3EE", false, "Studios 18+"),
+        ServerItem("freepornvideos", "Free Porn Videos", "MP4/HD", "https://www.freepornvideos.xxx", "#FACC15", false, "Tubes")
+    )
 
-        // Indian OTT / Web Series
-        CategoryItem("ullu", "director/ullu-originals", "Ullu Originals", "Indian OTT", "OTT", "#F43F5E"),
-        CategoryItem("fliz", "director/fliz-movies", "Fliz Movies", "Indian OTT", "OTT", "#FB7185"),
-        CategoryItem("nuefliks", "director/nuefliks", "Nuefliks", "Indian OTT", "OTT", "#A855F7"),
-        CategoryItem("hotshots", "director/hotshots", "Hotshots", "Indian OTT", "OTT", "#F59E0B"),
-        CategoryItem("hunters", "director/hunters", "Hunters", "Indian OTT", "OTT", "#EC4899"),
-        CategoryItem("moodx", "director/moodx-originals", "MoodX", "Indian OTT", "OTT", "#C084FC"),
-        CategoryItem("voovi", "director/voovi", "VooVi", "Indian OTT", "OTT", "#FB923C"),
-        CategoryItem("primeplay", "director/primeplay", "PrimePlay", "Indian OTT", "OTT", "#34D399"),
-        CategoryItem("besharams", "director/besharams", "Besharams", "Indian OTT", "OTT", "#F43F5E"),
-        CategoryItem("kooku", "director/kooku", "Kooku", "Indian OTT", "OTT", "#FACC15"),
-        CategoryItem("gupchup", "director/gupchup", "Gupchup", "Indian OTT", "OTT", "#38BDF8"),
-        CategoryItem("feneomovies", "director/feneomovies", "Feneomovies", "Indian OTT", "OTT", "#818CF8"),
-        CategoryItem("cinemadosti", "director/cinemadosti", "Cinemadosti", "Indian OTT", "OTT", "#10B981"),
-        CategoryItem("primeflix", "director/primeflix", "Primeflix", "Indian OTT", "OTT", "#22D3EE"),
-        CategoryItem("gemplex", "director/gemplex", "Gemplex", "Indian OTT", "OTT", "#A855F7"),
-        CategoryItem("rabbit", "director/rabbit", "Rabbit", "Indian OTT", "OTT", "#EC4899"),
-        CategoryItem("hotmasti", "director/hotmasti", "HotMasti", "Indian OTT", "OTT", "#FB7185"),
-        CategoryItem("mastiprime", "director/mastiprime", "MastiPrime", "Indian OTT", "OTT", "#F59E0B"),
-        CategoryItem("eknight", "director/ek-night-show", "Ek Night Show", "Indian OTT", "OTT", "#C084FC"),
-        CategoryItem("flixsk", "director/flixskmovies", "Flixskmovies", "Indian OTT", "OTT", "#38BDF8"),
-        CategoryItem("lootlo", "director/lootlo", "Lootlo", "Indian OTT", "OTT", "#FB923C"),
-        CategoryItem("hootzy", "director/hootzy", "Hootzy", "Indian OTT", "OTT", "#34D399"),
-        CategoryItem("balloons", "director/balloons", "Balloons", "Indian OTT", "OTT", "#F43F5E"),
-        CategoryItem("bigmoviezoo", "director/big-movie-zoo", "Big Movie Zoo", "Indian OTT", "OTT", "#FACC15"),
-        CategoryItem("bambooflix", "director/bambooflix", "Bambooflix", "Indian OTT", "OTT", "#10B981"),
-        CategoryItem("piliflix", "director/piliflix", "Piliflix", "Indian OTT", "OTT", "#F59E0B"),
-        CategoryItem("11upmovies", "director/11upmovies", "11upmovies", "Indian OTT", "OTT", "#818CF8"),
-        CategoryItem("eightshots", "director/eightshots", "Eightshots", "Indian OTT", "OTT", "#EC4899"),
-        CategoryItem("ientertainment", "director/i-entertainment", "I-Entertainment", "Indian OTT", "OTT", "#22D3EE"),
-        CategoryItem("hotprime", "director/hotprime", "Hotprime", "Indian OTT", "OTT", "#F43F5E"),
-        CategoryItem("bananaprime", "director/bananaprime", "BananaPrime", "Indian OTT", "OTT", "#FACC15"),
-        CategoryItem("chikooflix", "director/chikooflix", "Chikooflix", "Indian OTT", "OTT", "#FB923C"),
-        CategoryItem("glamheart", "director/glamheart", "Glamheart", "Indian OTT", "OTT", "#FB7185"),
-        CategoryItem("worldprime", "director/worldprime", "Worldprime", "Indian OTT", "OTT", "#38BDF8"),
+    val EXTRACTORS = listOf(
+        ExtractorItem("lulustream", "LuluStream / Vid / Vdo / Pvp", "lulustream • luluvid • luluvdo • lulupvp", "M3U8"),
+        ExtractorItem("ktplayer", "KtPlayer Deobfuscator + WebView", "watchporn.to • flashvars license solver", "MP4/HLS"),
+        ExtractorItem("vidhide", "VidHide / Xtapes Mirrors", "vidsp • vidhideplus • dhtpre • toul • xtapes", "HLS"),
+        ExtractorItem("filemoon", "FileMoon Extractor", "filemoon.sx • cdntelly", "EMBED"),
+        ExtractorItem("doodstream", "DoodStream / Ds2play", "ds2play.com • dood.wf", "MP4"),
+        ExtractorItem("bigwarp", "BigWarp Direct", "bigwarp.io", "HLS/MP4"),
+        ExtractorItem("speedostream", "SpeedoStream & VidSrc", "speedostream • vidsrc embeds", "M3U8"),
+        ExtractorItem("streamtape", "StreamTape / MixDrop", "streamtape • mixdrop mirrors", "MIRROR")
+    )
 
-        // International Studios (18+)
-        CategoryItem("brazzers", "genre/brazzers", "Brazzers", "Studios 18+", "18+", "#FACC15"),
-        CategoryItem("bangbros", "genre/bangbros", "Bangbros", "Studios 18+", "18+", "#FB923C"),
-        CategoryItem("naughtyamerica", "genre/naughty-america", "Naughty America", "Studios 18+", "18+", "#38BDF8"),
-        CategoryItem("realitykings", "genre/reality-kings", "Reality Kings", "Studios 18+", "18+", "#A855F7"),
-        CategoryItem("vixen", "genre/vixen", "Vixen", "Studios 18+", "18+", "#F43F5E"),
-        CategoryItem("wicked", "genre/wicked-pictures", "Wicked Pictures", "Studios 18+", "18+", "#EC4899"),
-        CategoryItem("evilangel", "genre/evil-angel", "Evil Angel", "Studios 18+", "18+", "#EF4444"),
-        CategoryItem("teamskeet", "genre/teamskeet", "Teamskeet", "Studios 18+", "18+", "#22D3EE"),
-        CategoryItem("digitalplayground", "genre/digital-playground", "Digital Playground", "Studios 18+", "18+", "#818CF8"),
-        CategoryItem("twistys", "genre/twistys", "Twistys", "Studios 18+", "18+", "#FB7185"),
-        CategoryItem("marcdorcel", "genre/marc-dorcel", "Marc Dorcel", "Studios 18+", "18+", "#C084FC"),
-        CategoryItem("julesjordan", "genre/jules-jordan-video", "Jules Jordan Video", "Studios 18+", "18+", "#F59E0B"),
-        CategoryItem("newsensations", "genre/new-sensations", "New Sensations", "Studios 18+", "18+", "#34D399"),
-        CategoryItem("ddfnetwork", "genre/ddf-network", "DDF Network", "Studios 18+", "18+", "#38BDF8"),
-        CategoryItem("mofos", "genre/mofos", "Mofos", "Studios 18+", "18+", "#FB923C"),
-        CategoryItem("elegantangel", "genre/elegant-angel", "Elegant Angel", "Studios 18+", "18+", "#EC4899"),
-        CategoryItem("fakehub", "genre/fakehub", "FakeHub", "Studios 18+", "18+", "#FACC15"),
-        CategoryItem("faketaxi", "genre/faketaxi", "FakeTaxi", "Studios 18+", "18+", "#F59E0B"),
-        CategoryItem("girlsway", "genre/girlsway", "GirlsWay", "Studios 18+", "18+", "#F43F5E"),
-        CategoryItem("mylf", "genre/mylf", "MYLF", "Studios 18+", "18+", "#A855F7")
+    private val AVATAR_PALETTE = listOf(
+        "#F43F5E", "#38BDF8", "#A855F7", "#10B981",
+        "#F59E0B", "#22D3EE", "#EC4899", "#FACC15"
     )
 
     @Volatile
     private var appContext: Context? = null
     @Volatile
     private var cachedPrefs: SharedPreferences? = null
-    @Volatile
-    private var lastDomainHealth: DomainHealthInfo? = null
     private val diagLogs = CopyOnWriteArrayList<String>()
+    private val serverHealthMap = ConcurrentHashMap<String, ServerHealthInfo>()
 
     fun bindContext(ctx: Context?) {
         if (ctx != null) appContext = ctx.applicationContext
@@ -191,30 +179,34 @@ object WatchOMoviesSettingsDialog {
     private fun nowTs(): String = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
 
     fun logDiag(tag: String, msg: String) {
-        val line = "[${nowTs()}] [$tag] $msg"
+        val line = "[${nowTs()}] [${tag.uppercase()}] $msg"
         diagLogs.add(line)
-        while (diagLogs.size > 150) diagLogs.removeAt(0)
+        while (diagLogs.size > 200) diagLogs.removeAt(0)
         Log.d(LOG_TAG, line)
     }
 
     // =========================================================================
-    // Persistent Getters & Setters
+    // Persistent Getters & Setters (Domains, Filters, Toggles, Cookies)
     // =========================================================================
-    fun getCustomDomain(ctx: Context? = appContext): String {
-        val raw = prefs(ctx)?.getString(KEY_CUSTOM_DOMAIN, DEFAULT_DOMAIN)?.trim().orEmpty()
-        return raw.removeSuffix("/").ifBlank { DEFAULT_DOMAIN }
+    fun getServerDomain(serverKey: String, ctx: Context? = appContext): String {
+        val srv = SERVERS.firstOrNull { it.key.equals(serverKey, true) }
+        val fallback = srv?.defaultUrl ?: "https://watchomovies.social"
+        val saved = prefs(ctx)?.getString("$KEY_DOMAIN_PREFIX${serverKey.lowercase()}", null)?.trim().orEmpty()
+        return saved.removeSuffix("/").ifBlank { fallback }
     }
 
-    fun setCustomDomain(ctx: Context, domain: String) {
-        val cleaned = domain.trim().removeSuffix("/").let {
+    fun setServerDomain(ctx: Context, serverKey: String, url: String) {
+        val srv = SERVERS.firstOrNull { it.key.equals(serverKey, true) }
+        val fallback = srv?.defaultUrl ?: "https://watchomovies.social"
+        val cleaned = url.trim().removeSuffix("/").let {
             when {
-                it.isBlank() -> DEFAULT_DOMAIN
+                it.isBlank() -> fallback
                 it.startsWith("http://") || it.startsWith("https://") -> it
                 else -> "https://$it"
             }
         }
-        prefs(ctx)?.edit()?.putString(KEY_CUSTOM_DOMAIN, cleaned)?.apply()
-        logDiag("DOMAIN", "Updated to $cleaned")
+        prefs(ctx)?.edit()?.putString("$KEY_DOMAIN_PREFIX${serverKey.lowercase()}", cleaned)?.apply()
+        logDiag("DOMAIN", "${serverKey.uppercase()} -> $cleaned")
     }
 
     fun getSelectedTheme(ctx: Context): ThemePalette {
@@ -226,62 +218,31 @@ object WatchOMoviesSettingsDialog {
         prefs(ctx)?.edit()?.putString(KEY_THEME, id)?.apply()
     }
 
-    fun isGroupEnabled(ctx: Context? = appContext, group: String): Boolean {
+    fun isGroupEnabled(group: String, ctx: Context? = appContext): Boolean {
         val p = prefs(ctx) ?: return true
         return when (group) {
-            "General" -> p.getBoolean(KEY_GRP_GENERAL, true)
             "Indian OTT" -> p.getBoolean(KEY_GRP_INDIAN_OTT, true)
             "Studios 18+" -> p.getBoolean(KEY_GRP_STUDIOS, true)
+            "Tubes" -> p.getBoolean(KEY_GRP_TUBES, true)
             else -> true
         }
     }
 
     fun setGroupEnabled(ctx: Context, group: String, enabled: Boolean) {
         val key = when (group) {
-            "General" -> KEY_GRP_GENERAL
             "Indian OTT" -> KEY_GRP_INDIAN_OTT
             "Studios 18+" -> KEY_GRP_STUDIOS
+            "Tubes" -> KEY_GRP_TUBES
             else -> return
         }
         prefs(ctx)?.edit()?.putBoolean(key, enabled)?.apply()
     }
 
-    fun isCategoryEnabled(ctx: Context? = appContext, cat: CategoryItem): Boolean {
-        if (!isGroupEnabled(ctx, cat.group)) return false
-        return prefs(ctx)?.getBoolean("$KEY_CAT_PREFIX${cat.key}", true) ?: true
-    }
+    fun isHindiOnly(ctx: Context? = appContext): Boolean =
+        prefs(ctx)?.getBoolean(KEY_HINDI_ONLY, false) ?: false
 
-    fun isCategorySwitchChecked(ctx: Context, catKey: String): Boolean {
-        return prefs(ctx)?.getBoolean("$KEY_CAT_PREFIX$catKey", true) ?: true
-    }
-
-    fun setCategoryEnabled(ctx: Context, catKey: String, enabled: Boolean) {
-        prefs(ctx)?.edit()?.putBoolean("$KEY_CAT_PREFIX$catKey", enabled)?.apply()
-    }
-
-    fun getCategoryOrder(ctx: Context? = appContext): List<String> {
-        val allKeys = ALL_CATEGORIES.map { it.key }
-        val saved = prefs(ctx)?.getString(KEY_CAT_ORDER, null)
-            ?.split(",")?.filter { it.isNotBlank() } ?: return allKeys
-        val valid = saved.filter { it in allKeys }
-        return valid + (allKeys - valid.toSet())
-    }
-
-    fun saveCategoryOrder(ctx: Context, orderedKeys: List<String>) {
-        prefs(ctx)?.edit()?.putString(KEY_CAT_ORDER, orderedKeys.joinToString(","))?.apply()
-    }
-
-    fun getActiveCategories(ctx: Context? = appContext): List<CategoryItem> {
-        val orderMap = getCategoryOrder(ctx).withIndex().associate { it.value to it.index }
-        val sorted = ALL_CATEGORIES
-            .sortedBy { orderMap[it.key] ?: Int.MAX_VALUE }
-            .filter { isCategoryEnabled(ctx, it) }
-        val result = sorted.ifEmpty { listOf(ALL_CATEGORIES.first()) }
-        return if (isShuffleHome(ctx) && result.size > 1) {
-            listOf(result.first()) + result.drop(1).shuffled()
-        } else {
-            result
-        }
+    fun setHindiOnly(ctx: Context, enabled: Boolean) {
+        prefs(ctx)?.edit()?.putBoolean(KEY_HINDI_ONLY, enabled)?.apply()
     }
 
     fun isShuffleHome(ctx: Context? = appContext): Boolean =
@@ -291,22 +252,81 @@ object WatchOMoviesSettingsDialog {
         prefs(ctx)?.edit()?.putBoolean(KEY_SHUFFLE_HOME, enabled)?.apply()
     }
 
-    fun isUseWebViewCf(ctx: Context? = appContext): Boolean =
-        prefs(ctx)?.getBoolean(KEY_USE_WEBVIEW_CF, true) ?: true
+    fun isServerRawChecked(key: String, ctx: Context? = appContext): Boolean =
+        prefs(ctx)?.getBoolean("$KEY_SRV_PREFIX${key.lowercase()}", true) ?: true
 
-    fun setUseWebViewCf(ctx: Context, enabled: Boolean) {
-        prefs(ctx)?.edit()?.putBoolean(KEY_USE_WEBVIEW_CF, enabled)?.apply()
+    fun isServerEnabled(key: String, ctx: Context? = appContext): Boolean {
+        if (!isServerRawChecked(key, ctx)) return false
+        val srv = SERVERS.firstOrNull { it.key.equals(key, true) } ?: return true
+        if (!isGroupEnabled(srv.category, ctx)) return false
+        if (isHindiOnly(ctx) && !srv.isHindi) return false
+        return true
     }
 
-    fun isCfAutoRetry(ctx: Context? = appContext): Boolean =
-        prefs(ctx)?.getBoolean(KEY_CF_AUTO_RETRY, true) ?: true
-
-    fun setCfAutoRetry(ctx: Context, enabled: Boolean) {
-        prefs(ctx)?.edit()?.putBoolean(KEY_CF_AUTO_RETRY, enabled)?.apply()
+    fun setServerEnabled(ctx: Context, key: String, enabled: Boolean) {
+        prefs(ctx)?.edit()?.putBoolean("$KEY_SRV_PREFIX${key.lowercase()}", enabled)?.apply()
     }
+
+    fun getServerOrder(ctx: Context? = appContext): List<String> {
+        val allKeys = SERVERS.map { it.key }
+        val saved = prefs(ctx)?.getString(KEY_SRV_ORDER, null)
+            ?.split(",")?.filter { it.isNotBlank() } ?: return allKeys
+        val valid = saved.filter { it in allKeys }
+        return valid + (allKeys - valid.toSet())
+    }
+
+    fun saveServerOrder(ctx: Context, orderedKeys: List<String>) {
+        prefs(ctx)?.edit()?.putString(KEY_SRV_ORDER, orderedKeys.joinToString(","))?.apply()
+    }
+
+    fun getOrderedEnabledServers(ctx: Context? = appContext): List<ServerItem> {
+        val orderMap = getServerOrder(ctx).withIndex().associate { it.value to it.index }
+        return SERVERS
+            .sortedBy { orderMap[it.key] ?: Int.MAX_VALUE }
+            .filter { isServerEnabled(it.key, ctx) }
+    }
+
+    fun isExtractorEnabled(key: String, ctx: Context? = appContext): Boolean =
+        prefs(ctx)?.getBoolean("$KEY_EXT_PREFIX${key.lowercase()}", true) ?: true
+
+    fun setExtractorEnabled(ctx: Context, key: String, enabled: Boolean) {
+        prefs(ctx)?.edit()?.putBoolean("$KEY_EXT_PREFIX${key.lowercase()}", enabled)?.apply()
+    }
+
+    fun isQuality4kEnabled(ctx: Context? = appContext): Boolean = prefs(ctx)?.getBoolean(KEY_Q_4K, true) ?: true
+    fun setQuality4kEnabled(ctx: Context, v: Boolean) = prefs(ctx)?.edit()?.putBoolean(KEY_Q_4K, v)?.apply()
+
+    fun isQuality1080Enabled(ctx: Context? = appContext): Boolean = prefs(ctx)?.getBoolean(KEY_Q_1080, true) ?: true
+    fun setQuality1080Enabled(ctx: Context, v: Boolean) = prefs(ctx)?.edit()?.putBoolean(KEY_Q_1080, v)?.apply()
+
+    fun isQuality720Enabled(ctx: Context? = appContext): Boolean = prefs(ctx)?.getBoolean(KEY_Q_720, true) ?: true
+    fun setQuality720Enabled(ctx: Context, v: Boolean) = prefs(ctx)?.edit()?.putBoolean(KEY_Q_720, v)?.apply()
+
+    fun isQuality480Enabled(ctx: Context? = appContext): Boolean = prefs(ctx)?.getBoolean(KEY_Q_480, true) ?: true
+    fun setQuality480Enabled(ctx: Context, v: Boolean) = prefs(ctx)?.edit()?.putBoolean(KEY_Q_480, v)?.apply()
+
+    fun getPreferredQuality(ctx: Context? = appContext): String = when {
+        isQuality4kEnabled(ctx) -> "4K"
+        isQuality1080Enabled(ctx) -> "1080p"
+        isQuality720Enabled(ctx) -> "720p"
+        isQuality480Enabled(ctx) -> "480p"
+        else -> "AUTO"
+    }
+
+    fun getConcurrency(ctx: Context? = appContext): Int = prefs(ctx)?.getInt(KEY_CONCURRENCY, 9) ?: 9
+    fun setConcurrency(ctx: Context, v: Int) = prefs(ctx)?.edit()?.putInt(KEY_CONCURRENCY, v.coerceIn(2, 20))?.apply()
+
+    fun getTimeoutSeconds(ctx: Context? = appContext): Int = prefs(ctx)?.getInt(KEY_TIMEOUT_SEC, 25) ?: 25
+    fun setTimeoutSeconds(ctx: Context, v: Int) = prefs(ctx)?.edit()?.putInt(KEY_TIMEOUT_SEC, v.coerceIn(10, 60))?.apply()
+
+    fun isUseWebViewCf(ctx: Context? = appContext): Boolean = prefs(ctx)?.getBoolean(KEY_USE_WEBVIEW_CF, true) ?: true
+    fun setUseWebViewCf(ctx: Context, v: Boolean) = prefs(ctx)?.edit()?.putBoolean(KEY_USE_WEBVIEW_CF, v)?.apply()
+
+    fun isCfAutoRetry(ctx: Context? = appContext): Boolean = prefs(ctx)?.getBoolean(KEY_CF_AUTO_RETRY, true) ?: true
+    fun setCfAutoRetry(ctx: Context, v: Boolean) = prefs(ctx)?.edit()?.putBoolean(KEY_CF_AUTO_RETRY, v)?.apply()
 
     // =========================================================================
-    // Cloudflare Cookie Storage + Clear
+    // Cloudflare Cookie Management
     // =========================================================================
     private fun extractHostKey(domainOrUrl: String): String = runCatching {
         val raw = if (domainOrUrl.startsWith("http")) domainOrUrl else "https://$domainOrUrl"
@@ -333,7 +353,7 @@ object WatchOMoviesSettingsDialog {
         return out
     }
 
-    fun getCookieForDomain(ctx: Context? = appContext, urlOrDomain: String): String? {
+    fun getCookieForDomain(urlOrDomain: String, ctx: Context? = appContext): String? {
         if (!isUseWebViewCf(ctx)) return null
         val map = getSavedCookiesMap(ctx)
         if (map.isEmpty()) return null
@@ -342,7 +362,7 @@ object WatchOMoviesSettingsDialog {
         return raw?.takeIf { it.isNotBlank() && it != CF_VERIFIED_MARKER }
     }
 
-    fun isDomainCfVerified(ctx: Context? = appContext, urlOrDomain: String): Boolean {
+    fun isDomainCfVerified(urlOrDomain: String, ctx: Context? = appContext): Boolean {
         val map = getSavedCookiesMap(ctx)
         if (map.isEmpty()) return false
         val host = extractHostKey(urlOrDomain)
@@ -359,45 +379,47 @@ object WatchOMoviesSettingsDialog {
     }
 
     // =========================================================================
-    // Live Domain Health Probe
+    // Live Server Health Probe
     // =========================================================================
-    private suspend fun probeDomainLive(ctx: Context, domainUrl: String): DomainHealthInfo = withContext(Dispatchers.IO) {
+    private suspend fun probeServerLive(ctx: Context, srv: ServerItem): ServerHealthInfo = withContext(Dispatchers.IO) {
         val start = System.currentTimeMillis()
+        val targetUrl = getServerDomain(srv.key, ctx)
+        val tMs = (getTimeoutSeconds(ctx)).coerceIn(8, 15) * 1000
         try {
-            val conn = (URL("$domainUrl/").openConnection() as HttpURLConnection).apply {
+            val conn = (URL("$targetUrl/").openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
-                connectTimeout = 12_000
-                readTimeout = 12_000
+                connectTimeout = tMs
+                readTimeout = tMs
                 instanceFollowRedirects = true
                 setRequestProperty("User-Agent", CF_BYPASS_UA)
-                getCookieForDomain(ctx, domainUrl)?.let { setRequestProperty("Cookie", it) }
+                getCookieForDomain(targetUrl, ctx)?.let { setRequestProperty("Cookie", it) }
             }
             val code = conn.responseCode
             val ms = System.currentTimeMillis() - start
             runCatching { conn.inputStream?.close() }
             runCatching { conn.errorStream?.close() }
             conn.disconnect()
-            val ok = code in 200..399
+            val ok = code in 200..399 || code == 405
             val status = when {
-                ok -> "LIVE ($code)"
-                code == 403 || code == 503 -> "CF BLOCKED ($code)"
+                ok -> "LIVE"
+                code == 403 || code == 503 -> "CF $code"
                 else -> "HTTP $code"
             }
-            val info = DomainHealthInfo(status, ok, code, ms, domainUrl, nowTs())
-            lastDomainHealth = info
-            logDiag(if (ok) "PROBE" else "CF", "$status • ${ms}ms • $domainUrl")
+            val info = ServerHealthInfo(srv.key, status, ok, code, ms, targetUrl, nowTs())
+            serverHealthMap[srv.key] = info
+            if (!ok) logDiag("CF", "${srv.name}: $status ($targetUrl)")
             info
         } catch (e: Exception) {
             val ms = System.currentTimeMillis() - start
-            val info = DomainHealthInfo("DOWN", false, 0, ms, e.message ?: "Network error", nowTs())
-            lastDomainHealth = info
-            logDiag("ERROR", "Probe failed (${ms}ms): ${e.message}")
+            val info = ServerHealthInfo(srv.key, "DOWN", false, 0, ms, e.message ?: "Error", nowTs())
+            serverHealthMap[srv.key] = info
+            logDiag("ERROR", "${srv.name} probe failed: ${e.message}")
             info
         }
     }
 
     // =========================================================================
-    // Ultra Glass & Neon Design Helpers (MovieFox Style)
+    // MovieFox Glass & Neon Design System Helpers
     // =========================================================================
     private fun resolveActivityContext(rawCtx: Context): Context {
         if (rawCtx is Activity) return rawCtx
@@ -622,61 +644,134 @@ object WatchOMoviesSettingsDialog {
     }
 
     // =========================================================================
-    // WebView Cloudflare Bypass Solver (Exact MovieFox Engine)
+    // Custom Domain / Mirror Editor Dialog for Any Server
+    // =========================================================================
+    private fun openDomainEditorDialog(
+        ctx: Context,
+        srv: ServerItem,
+        accentHex: String,
+        onSaved: () -> Unit
+    ) {
+        val box = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            background = glassCardBg("#0B1120", "#070B14", alphaColor(accentHex, 130), dpf(ctx, 18f), 2)
+            setPadding(dp(ctx, 16), dp(ctx, 14), dp(ctx, 16), dp(ctx, 14))
+        }
+        box.addView(TextView(ctx).apply {
+            text = "🌐 ${srv.name} Mirror Domain"
+            textSize = 14.5f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(Color.WHITE)
+        })
+        box.addView(TextView(ctx).apply {
+            text = "Default: ${srv.defaultUrl}"
+            textSize = 10f
+            setTextColor(safeColor("#94A3B8"))
+            setPadding(0, dp(ctx, 3), 0, dp(ctx, 10))
+        })
+        val input = EditText(ctx).apply {
+            setText(getServerDomain(srv.key, ctx))
+            hint = srv.defaultUrl
+            setHintTextColor(safeColor("#64748B"))
+            setTextColor(Color.WHITE)
+            textSize = 12.5f
+            inputType = InputType.TYPE_TEXT_VARIATION_URI
+            isSingleLine = true
+            background = cardBg("#0F172A", "#334155", dpf(ctx, 11f), 2)
+            setPadding(dp(ctx, 12), dp(ctx, 9), dp(ctx, 12), dp(ctx, 9))
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ctx, 42)).apply {
+                bottomMargin = dp(ctx, 12)
+            }
+        }
+        box.addView(input)
+
+        val dlg = AlertDialog.Builder(ctx).setView(box).create()
+        val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+        row.addView(Button(ctx).apply {
+            text = "RESET"
+            textSize = 10.5f; setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor("#CBD5E1"))
+            background = cardBg("#1E293B", "#334155", dpf(ctx, 10f), 1)
+            layoutParams = LinearLayout.LayoutParams(0, dp(ctx, 38), 1f).apply { marginEnd = dp(ctx, 6) }
+            setOnClickListener {
+                setServerDomain(ctx, srv.key, srv.defaultUrl)
+                onSaved()
+                safeToast(ctx, "${srv.name} reset to default")
+                dlg.dismiss()
+            }
+        })
+        row.addView(Button(ctx).apply {
+            text = "SAVE URL"
+            textSize = 10.5f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
+            background = neonGradBtn(accentHex, dpf(ctx, 10f))
+            layoutParams = LinearLayout.LayoutParams(0, dp(ctx, 38), 1.3f)
+            setOnClickListener {
+                setServerDomain(ctx, srv.key, input.text.toString())
+                onSaved()
+                safeToast(ctx, "${srv.name} domain saved!")
+                dlg.dismiss()
+            }
+        })
+        box.addView(row)
+        runCatching {
+            dlg.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            dlg.show()
+        }
+    }
+
+    // =========================================================================
+    // Multi-Server WebView Cloudflare Solver (MovieFox Queue Engine)
     // =========================================================================
     @SuppressLint("SetJavaScriptEnabled")
-    fun openCfBypassWindow(
+    fun openCfBypassQueue(
         rawCtx: Context,
-        targetUrl: String,
+        targets: List<ServerItem>,
         onCompleted: (() -> Unit)? = null
     ) {
         val ctx = resolveActivityContext(rawCtx)
-        if (!isContextAlive(ctx)) return
+        if (!isContextAlive(ctx) || targets.isEmpty()) return
         bindContext(ctx)
 
         val handler = Handler(Looper.getMainLooper())
         val closed = AtomicBoolean(false)
+        val stepToken = AtomicInteger(0)
         var dialogRef: Dialog? = null
         var webViewRef: WebView? = null
+        var idx = 0
+        var savedCount = 0
 
         val titleTv = TextView(ctx).apply {
-            text = "🛡️ Cloudflare Solver • WatchOMovies"
-            textSize = 14f
-            isSingleLine = true
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Color.WHITE)
+            textSize = 14f; isSingleLine = true; ellipsize = TextUtils.TruncateAt.END
+            setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
         }
         val statusTv = TextView(ctx).apply {
-            text = "Loading $targetUrl..."
-            textSize = 10.5f
-            isSingleLine = true
-            ellipsize = TextUtils.TruncateAt.END
-            setTextColor(safeColor("#93C5FD"))
-            setPadding(0, dp(ctx, 2), 0, dp(ctx, 6))
+            textSize = 10.5f; isSingleLine = true; ellipsize = TextUtils.TruncateAt.END
+            setTextColor(safeColor("#93C5FD")); setPadding(0, dp(ctx, 2), 0, dp(ctx, 6))
         }
         val progressBar = ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal).apply {
-            max = 100
-            progress = 15
+            max = 100; progress = 15
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ctx, 4)).apply {
                 bottomMargin = dp(ctx, 8)
             }
         }
 
-        fun saveCookieNow(url: String?, requireClearance: Boolean): Boolean {
+        fun currentTarget(): ServerItem = targets[idx.coerceIn(0, targets.lastIndex)]
+        fun currentTargetUrl(): String = getServerDomain(currentTarget().key, ctx)
+
+        fun saveDomainState(url: String?, requireClearance: Boolean): Boolean {
             return runCatching {
                 val cm = CookieManager.getInstance()
                 cm.flush()
+                val targetUrl = currentTargetUrl()
                 val cookie = cm.getCookie(url ?: targetUrl).orEmpty().ifBlank { cm.getCookie(targetUrl).orEmpty() }
                 val hasClearance = cookie.contains("cf_clearance", true) || cookie.contains("__cf_bm", true)
                 when {
                     hasClearance -> {
                         saveCookieForDomain(ctx, targetUrl, cookie)
-                        logDiag("CF", "Clearance cookie saved (${cookie.length} chars)")
+                        logDiag("CF", "${currentTarget().name}: clearance saved")
                         true
                     }
                     !requireClearance -> {
                         saveCookieForDomain(ctx, targetUrl, cookie.ifBlank { CF_VERIFIED_MARKER })
-                        logDiag("CF", if (cookie.isNotBlank()) "Cookie saved (${cookie.length} chars)" else "Verified (No CF block)")
                         true
                     }
                     else -> false
@@ -686,12 +781,37 @@ object WatchOMoviesSettingsDialog {
 
         fun closeAll() {
             if (!closed.compareAndSet(false, true)) return
+            stepToken.incrementAndGet()
             handler.removeCallbacksAndMessages(null)
             runCatching { webViewRef?.stopLoading(); webViewRef?.destroy() }
             webViewRef = null
             runCatching { dialogRef?.dismiss() }
             dialogRef = null
+            if (savedCount > 0) safeToast(ctx, "Verified ($savedCount/${targets.size})")
             onCompleted?.invoke()
+        }
+
+        fun loadCurrentTarget() {
+            if (closed.get()) return
+            if (idx >= targets.size) { closeAll(); return }
+            stepToken.incrementAndGet()
+            val srv = currentTarget()
+            val url = currentTargetUrl()
+            titleTv.text = "🛡️ CF Solver (${idx + 1}/${targets.size}) • ${srv.name}"
+            statusTv.text = "Loading $url..."
+            statusTv.setTextColor(safeColor("#93C5FD"))
+            progressBar.visibility = View.VISIBLE
+            progressBar.progress = 15
+            webViewRef?.stopLoading()
+            webViewRef?.loadUrl(url)
+        }
+
+        fun advanceNext(expectedToken: Int, markSaved: Boolean) {
+            if (closed.get()) return
+            if (!stepToken.compareAndSet(expectedToken, expectedToken + 1)) return
+            if (markSaved) savedCount++
+            idx++
+            if (idx >= targets.size) closeAll() else loadCurrentTarget()
         }
 
         val container = LinearLayout(ctx).apply {
@@ -699,15 +819,11 @@ object WatchOMoviesSettingsDialog {
             background = glassCardBg("#0B1120", "#070B14", alphaColor("#38BDF8", 110), dpf(ctx, 20f), 2)
             setPadding(dp(ctx, 14), dp(ctx, 12), dp(ctx, 14), dp(ctx, 12))
         }
-        container.addView(titleTv)
-        container.addView(statusTv)
-        container.addView(progressBar)
+        container.addView(titleTv); container.addView(statusTv); container.addView(progressBar)
 
         val wvHeight = (ctx.resources.displayMetrics.heightPixels * 0.54f).toInt().coerceAtLeast(dp(ctx, 290))
         val wv = WebView(ctx).apply {
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, wvHeight).apply {
-                bottomMargin = dp(ctx, 10)
-            }
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, wvHeight).apply { bottomMargin = dp(ctx, 10) }
             settings.apply {
                 javaScriptEnabled = true
                 domStorageEnabled = true
@@ -724,12 +840,13 @@ object WatchOMoviesSettingsDialog {
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean = false
                 override fun onPageFinished(view: WebView?, url: String?) {
-                    if (saveCookieNow(url, requireClearance = true)) {
-                        statusTv.text = "✓ CF Cleared! Closing..."
+                    val token = stepToken.get()
+                    if (saveDomainState(url, requireClearance = true)) {
+                        statusTv.text = "✓ CF Cleared for ${currentTarget().name}!"
                         statusTv.setTextColor(safeColor("#6EE7B7"))
-                        handler.postDelayed({ closeAll() }, 450L)
+                        handler.postDelayed({ advanceNext(token, true) }, 450L)
                     } else {
-                        statusTv.text = "Solve challenge if visible, or tap ✓ Save"
+                        statusTv.text = "Solve challenge if visible, or tap ✓ Save & Next"
                         statusTv.setTextColor(safeColor("#FDE68A"))
                     }
                 }
@@ -740,10 +857,9 @@ object WatchOMoviesSettingsDialog {
 
         val btnRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
         btnRow.addView(Button(ctx).apply {
-            text = "⚡ CF Click"
-            textSize = 10f; isAllCaps = false; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
+            text = "⚡ CF Click"; textSize = 10f; isAllCaps = false; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
             background = neonGradBtn("#059669", dpf(ctx, 10f))
-            layoutParams = LinearLayout.LayoutParams(0, dp(ctx, 38), 1f).apply { marginEnd = dp(ctx, 6) }
+            layoutParams = LinearLayout.LayoutParams(0, dp(ctx, 38), 1f).apply { marginEnd = dp(ctx, 5) }
             attachPressAnim(this)
             setOnClickListener {
                 wv.evaluateJavascript(
@@ -776,20 +892,28 @@ object WatchOMoviesSettingsDialog {
             }
         })
         btnRow.addView(Button(ctx).apply {
-            text = "✓ Save Cookie"
+            text = if (targets.size > 1) "✓ Save & Next" else "✓ Save"
             textSize = 10f; isAllCaps = false; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
             background = neonGradBtn("#2563EB", dpf(ctx, 10f))
-            layoutParams = LinearLayout.LayoutParams(0, dp(ctx, 38), 1.1f).apply { marginEnd = dp(ctx, 6) }
+            layoutParams = LinearLayout.LayoutParams(0, dp(ctx, 38), 1.15f).apply { marginEnd = dp(ctx, 5) }
             attachPressAnim(this)
             setOnClickListener {
-                saveCookieNow(wv.url, requireClearance = false)
-                safeToast(ctx, "CF cookie saved!")
-                closeAll()
+                val token = stepToken.get()
+                val ok = saveDomainState(wv.url, requireClearance = false)
+                advanceNext(token, ok)
             }
         })
+        if (targets.size > 1) {
+            btnRow.addView(Button(ctx).apply {
+                text = "Skip"; textSize = 10f; isAllCaps = false; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
+                background = cardBg("#1E293B", "#334155", dpf(ctx, 10f), 1)
+                layoutParams = LinearLayout.LayoutParams(0, dp(ctx, 38), 0.7f).apply { marginEnd = dp(ctx, 5) }
+                attachPressAnim(this)
+                setOnClickListener { advanceNext(stepToken.get(), false) }
+            })
+        }
         btnRow.addView(Button(ctx).apply {
-            text = "Close"
-            textSize = 10f; isAllCaps = false; setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor("#CBD5E1"))
+            text = "Close"; textSize = 10f; isAllCaps = false; setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor("#CBD5E1"))
             background = cardBg("#141C2B", "#2A3650", dpf(ctx, 10f), 1)
             layoutParams = LinearLayout.LayoutParams(0, dp(ctx, 38), 0.7f)
             attachPressAnim(this)
@@ -808,24 +932,25 @@ object WatchOMoviesSettingsDialog {
             dlg.show()
             val width = (ctx.resources.displayMetrics.widthPixels * 0.95).toInt()
             dlg.window?.setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT)
-            wv.loadUrl(targetUrl)
+            loadCurrentTarget()
         }
     }
 
     // =========================================================================
-    // Category List Adapter (MovieFox ServerListAdapter Style)
+    // Server List Adapter (Monogram + Live Status + Domain Edit + Order + Switch)
     // =========================================================================
-    private class CategoryListAdapter(
+    private class ServerListAdapter(
         private val ctx: Context,
         private val getAccentHex: () -> String,
         private val onToggleChanged: () -> Unit,
-        private val onMoveUp: (CategoryItem) -> Unit,
-        private val onMoveDown: (CategoryItem) -> Unit
+        private val onEditDomain: (ServerItem) -> Unit,
+        private val onMoveUp: (ServerItem) -> Unit,
+        private val onMoveDown: (ServerItem) -> Unit
     ) : BaseAdapter() {
 
-        private var items: List<CategoryItem> = emptyList()
+        private var items: List<ServerItem> = emptyList()
 
-        fun submitList(newList: List<CategoryItem>) {
+        fun submitList(newList: List<ServerItem>) {
             items = newList
             notifyDataSetChanged()
         }
@@ -833,17 +958,20 @@ object WatchOMoviesSettingsDialog {
         private class VH(
             val root: LinearLayout,
             val avatarTv: TextView,
+            val statusDot: View,
             val nameTv: TextView,
-            val groupTv: TextView,
+            val catTv: TextView,
             val tagTv: TextView,
-            val pathTv: TextView,
+            val statusTv: TextView,
+            val urlTv: TextView,
+            val editBtn: TextView,
             val upBtn: TextView,
             val downBtn: TextView,
             val sw: NeonSwitch
         )
 
         override fun getCount(): Int = items.size
-        override fun getItem(position: Int): CategoryItem = items[position]
+        override fun getItem(position: Int): ServerItem = items[position]
         override fun getItemId(position: Int): Long = position.toLong()
 
         override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
@@ -857,83 +985,97 @@ object WatchOMoviesSettingsDialog {
                     setPadding(dp(ctx, 10), dp(ctx, 9), dp(ctx, 10), dp(ctx, 9))
                 }
 
-                val avatarTv = TextView(ctx).apply {
-                    textSize = 11.5f
-                    gravity = Gravity.CENTER
-                    setTypeface(typeface, Typeface.BOLD)
-                    layoutParams = LinearLayout.LayoutParams(dp(ctx, 36), dp(ctx, 36)).apply { marginEnd = dp(ctx, 10) }
+                val avatarWrap = FrameLayout(ctx).apply {
+                    layoutParams = LinearLayout.LayoutParams(dp(ctx, 36), dp(ctx, 36)).apply { marginEnd = dp(ctx, 9) }
                 }
+                val avatarTv = TextView(ctx).apply {
+                    textSize = 11.5f; gravity = Gravity.CENTER; setTypeface(typeface, Typeface.BOLD)
+                    layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                }
+                val statusDot = View(ctx).apply {
+                    layoutParams = FrameLayout.LayoutParams(dp(ctx, 9), dp(ctx, 9), Gravity.END or Gravity.BOTTOM)
+                }
+                avatarWrap.addView(avatarTv); avatarWrap.addView(statusDot)
 
                 val col = LinearLayout(ctx).apply {
                     orientation = LinearLayout.VERTICAL
-                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                        marginEnd = dp(ctx, 6)
-                    }
+                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(ctx, 5) }
                 }
                 val nameTv = TextView(ctx).apply {
-                    textSize = 13f
-                    isSingleLine = true
-                    ellipsize = TextUtils.TruncateAt.END
-                    setTypeface(typeface, Typeface.BOLD)
-                    setTextColor(Color.WHITE)
+                    textSize = 13f; isSingleLine = true; ellipsize = TextUtils.TruncateAt.END
+                    setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
                 }
                 val badgeLine = LinearLayout(ctx).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
+                    orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                     layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                         topMargin = dp(ctx, 3)
                     }
                 }
-                val groupTv = TextView(ctx).apply {
-                    textSize = 8f; isSingleLine = true; setTypeface(typeface, Typeface.BOLD)
+                val catTv = TextView(ctx).apply {
+                    textSize = 7.8f; isSingleLine = true; setTypeface(typeface, Typeface.BOLD)
                     setPadding(dp(ctx, 5), dp(ctx, 1), dp(ctx, 5), dp(ctx, 1))
                 }
                 val tagTv = TextView(ctx).apply {
-                    textSize = 8f; isSingleLine = true; setTypeface(typeface, Typeface.BOLD)
+                    textSize = 7.8f; isSingleLine = true; setTypeface(typeface, Typeface.BOLD)
                     setPadding(dp(ctx, 5), dp(ctx, 1), dp(ctx, 5), dp(ctx, 1))
-                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-                        .apply { marginStart = dp(ctx, 4) }
-                }
-                badgeLine.addView(groupTv)
-                badgeLine.addView(tagTv)
-
-                val pathTv = TextView(ctx).apply {
-                    textSize = 9.2f; isSingleLine = true; ellipsize = TextUtils.TruncateAt.END
-                    setTextColor(safeColor("#6B7894"))
-                    setPadding(0, dp(ctx, 2), 0, 0)
-                }
-                col.addView(nameTv)
-                col.addView(badgeLine)
-                col.addView(pathTv)
-
-                val orderCol = LinearLayout(ctx).apply {
-                    orientation = LinearLayout.VERTICAL
-                    gravity = Gravity.CENTER
                     layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                        marginEnd = dp(ctx, 8)
+                        marginStart = dp(ctx, 4)
+                    }
+                }
+                val statusTv = TextView(ctx).apply {
+                    textSize = 7.8f; isSingleLine = true; setTypeface(typeface, Typeface.BOLD)
+                    setPadding(dp(ctx, 5), dp(ctx, 1), dp(ctx, 5), dp(ctx, 1))
+                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                        marginStart = dp(ctx, 4)
+                    }
+                }
+                badgeLine.addView(catTv); badgeLine.addView(tagTv); badgeLine.addView(statusTv)
+
+                val urlTv = TextView(ctx).apply {
+                    textSize = 9.2f; isSingleLine = true; ellipsize = TextUtils.TruncateAt.END
+                    setTextColor(safeColor("#6B7894")); setPadding(0, dp(ctx, 2), 0, 0)
+                }
+                col.addView(nameTv); col.addView(badgeLine); col.addView(urlTv)
+
+                // Edit Domain Button
+                val editBtn = TextView(ctx).apply {
+                    text = "URL"
+                    textSize = 8.5f
+                    gravity = Gravity.CENTER
+                    setTypeface(typeface, Typeface.BOLD)
+                    setTextColor(safeColor("#93C5FD"))
+                    background = tintBadgeBg("#2563EB", dpf(ctx, 7f), 36, 95)
+                    setPadding(dp(ctx, 6), dp(ctx, 6), dp(ctx, 6), dp(ctx, 6))
+                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                        marginEnd = dp(ctx, 5)
+                    }
+                    attachPressAnim(this)
+                }
+
+                // Order Arrows
+                val orderCol = LinearLayout(ctx).apply {
+                    orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
+                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                        marginEnd = dp(ctx, 6)
                     }
                 }
                 val upBtn = TextView(ctx).apply {
-                    text = "▲"; textSize = 8.5f; gravity = Gravity.CENTER; includeFontPadding = false
-                    layoutParams = LinearLayout.LayoutParams(dp(ctx, 24), dp(ctx, 18)).apply { bottomMargin = dp(ctx, 3) }
+                    text = "▲"; textSize = 8f; gravity = Gravity.CENTER; includeFontPadding = false
+                    layoutParams = LinearLayout.LayoutParams(dp(ctx, 22), dp(ctx, 17)).apply { bottomMargin = dp(ctx, 3) }
                     attachPressAnim(this)
                 }
                 val downBtn = TextView(ctx).apply {
-                    text = "▼"; textSize = 8.5f; gravity = Gravity.CENTER; includeFontPadding = false
-                    layoutParams = LinearLayout.LayoutParams(dp(ctx, 24), dp(ctx, 18))
+                    text = "▼"; textSize = 8f; gravity = Gravity.CENTER; includeFontPadding = false
+                    layoutParams = LinearLayout.LayoutParams(dp(ctx, 22), dp(ctx, 17))
                     attachPressAnim(this)
                 }
-                orderCol.addView(upBtn)
-                orderCol.addView(downBtn)
+                orderCol.addView(upBtn); orderCol.addView(downBtn)
 
                 val sw = NeonSwitch(ctx, true, getAccentHex())
 
-                card.addView(avatarTv)
-                card.addView(col)
-                card.addView(orderCol)
-                card.addView(sw)
+                card.addView(avatarWrap); card.addView(col); card.addView(editBtn); card.addView(orderCol); card.addView(sw)
 
-                holder = VH(card, avatarTv, nameTv, groupTv, tagTv, pathTv, upBtn, downBtn, sw)
+                holder = VH(card, avatarTv, statusDot, nameTv, catTv, tagTv, statusTv, urlTv, editBtn, upBtn, downBtn, sw)
                 card.tag = holder
                 rowView = card
             } else {
@@ -941,40 +1083,57 @@ object WatchOMoviesSettingsDialog {
                 holder = convertView.tag as VH
             }
 
-            val cat = items[position]
-            val groupOn = isGroupEnabled(ctx, cat.group)
-            val isOn = isCategorySwitchChecked(ctx, cat.key) && groupOn
+            val srv = items[position]
+            val active = isServerEnabled(srv.key, ctx)
+            val rawChecked = isServerRawChecked(srv.key, ctx)
             val accent = getAccentHex()
+            val domainUrl = getServerDomain(srv.key, ctx)
 
             holder.root.background = glassCardBg(
-                topHex = if (isOn) "#141C2F" else "#0E131F",
-                bottomHex = if (isOn) "#0D1322" else "#0A0E17",
-                strokeColor = if (isOn) alphaColor(cat.accentHex, 78) else safeColor("#1C2438"),
+                topHex = if (active) "#141C2F" else "#0E131F",
+                bottomHex = if (active) "#0D1322" else "#0A0E17",
+                strokeColor = if (active) alphaColor(srv.accentHex, 78) else safeColor("#1C2438"),
                 radius = dpf(ctx, 15f),
                 strokeWidth = 2
             )
 
-            holder.avatarTv.text = monogramOf(cat.name)
-            holder.avatarTv.setTextColor(safeColor(cat.accentHex, "#38BDF8"))
-            holder.avatarTv.background = tintBadgeBg(cat.accentHex, dpf(ctx, 10f), 42, 110)
+            holder.avatarTv.text = monogramOf(srv.name)
+            holder.avatarTv.setTextColor(safeColor(srv.accentHex, "#38BDF8"))
+            holder.avatarTv.background = tintBadgeBg(srv.accentHex, dpf(ctx, 10f), 42, 110)
 
-            holder.nameTv.text = cat.name
-            holder.nameTv.alpha = if (isOn) 1f else 0.52f
-
-            val grpColor = when (cat.group) {
-                "Indian OTT" -> "#F43F5E"
-                "Studios 18+" -> "#F59E0B"
-                else -> "#38BDF8"
+            val health = serverHealthMap[srv.key]
+            val dotHex = when {
+                health == null -> if (active) "#38BDF8" else "#475569"
+                health.isHealthy -> "#22C55E"
+                else -> "#EF4444"
             }
-            holder.groupTv.text = if (groupOn) cat.group else "${cat.group} (OFF)"
-            holder.groupTv.setTextColor(safeColor(if (groupOn) grpColor else "#94A3B8"))
-            holder.groupTv.background = tintBadgeBg(if (groupOn) grpColor else "#64748B", dpf(ctx, 6f), 32, 70)
+            holder.statusDot.background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL; setColor(safeColor(dotHex)); setStroke(dp(ctx, 2), safeColor("#0E1320"))
+            }
 
-            holder.tagTv.text = cat.tag
-            holder.tagTv.setTextColor(safeColor(cat.accentHex))
-            holder.tagTv.background = tintBadgeBg(cat.accentHex, dpf(ctx, 6f), 32, 70)
+            holder.nameTv.text = srv.name
+            holder.nameTv.alpha = if (active) 1f else 0.55f
 
-            holder.pathTv.text = if (cat.path.isBlank()) "/ (Home Feed)" else "/${cat.path}/"
+            holder.catTv.text = srv.category
+            holder.catTv.setTextColor(safeColor("#38BDF8"))
+            holder.catTv.background = tintBadgeBg("#38BDF8", dpf(ctx, 6f), 32, 70)
+
+            holder.tagTv.text = srv.tag
+            holder.tagTv.setTextColor(safeColor(srv.accentHex))
+            holder.tagTv.background = tintBadgeBg(srv.accentHex, dpf(ctx, 6f), 32, 70)
+
+            if (health != null) {
+                holder.statusTv.visibility = View.VISIBLE
+                holder.statusTv.text = if (health.latencyMs > 0) "${health.status} ${health.latencyMs}ms" else health.status
+                val hHex = if (health.isHealthy) "#34D399" else "#F87171"
+                holder.statusTv.setTextColor(safeColor(hHex))
+                holder.statusTv.background = tintBadgeBg(hHex, dpf(ctx, 6f), 38, 95)
+            } else {
+                holder.statusTv.visibility = View.GONE
+            }
+
+            holder.urlTv.text = domainUrl
+            holder.editBtn.setOnClickListener { onEditDomain(srv) }
 
             val canUp = position > 0
             val canDown = position < items.lastIndex
@@ -983,14 +1142,14 @@ object WatchOMoviesSettingsDialog {
             holder.downBtn.setTextColor(safeColor(if (canDown) "#7DD3FC" else "#334155"))
             holder.downBtn.background = cardBg(if (canDown) "#162238" else "#0E1422", if (canDown) "#263B5E" else "#182033", dpf(ctx, 6f), 1)
 
-            holder.upBtn.setOnClickListener { if (canUp) onMoveUp(cat) }
-            holder.downBtn.setOnClickListener { if (canDown) onMoveDown(cat) }
+            holder.upBtn.setOnClickListener { if (canUp) onMoveUp(srv) }
+            holder.downBtn.setOnClickListener { if (canDown) onMoveDown(srv) }
 
             holder.sw.onCheckedChange = null
             holder.sw.updateAccent(accent)
-            holder.sw.setCheckedSilent(isCategorySwitchChecked(ctx, cat.key))
+            holder.sw.setCheckedSilent(rawChecked)
             holder.sw.onCheckedChange = { checked ->
-                setCategoryEnabled(ctx, cat.key, checked)
+                setServerEnabled(ctx, srv.key, checked)
                 onToggleChanged()
                 notifyDataSetChanged()
             }
@@ -1014,10 +1173,13 @@ object WatchOMoviesSettingsDialog {
         val dialogScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         var activeTheme = getSelectedTheme(ctx)
         var currentQuery = ""
-        var selectedGroup = "All"
+        var selectedCategory = "All"
+        var currentConcurrency = getConcurrency(ctx)
+        var currentTimeout = getTimeoutSeconds(ctx)
         var activeTabIdx = 0
 
         val themedSwitches = mutableListOf<NeonSwitch>()
+        val themedPlusBtns = mutableListOf<TextView>()
         val themedSectionBars = mutableListOf<View>()
 
         val root = LinearLayout(ctx).apply {
@@ -1030,37 +1192,26 @@ object WatchOMoviesSettingsDialog {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(ctx, 14), dp(ctx, 12), dp(ctx, 14), dp(ctx, 12))
         }
-        val titleRow = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
+        val titleRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         val titleCol = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         }
         titleCol.addView(TextView(ctx).apply {
-            text = "WATCHOMOVIES ULTRA"
-            textSize = 16.5f
-            letterSpacing = 0.04f
-            isSingleLine = true
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Color.WHITE)
+            text = "WATCHOMOVIES ULTRA MAX"
+            textSize = 16.5f; letterSpacing = 0.04f; isSingleLine = true
+            setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
         })
         titleCol.addView(TextView(ctx).apply {
-            text = "PRO SETTINGS • DOMAIN, FILTERS & CF SHIELD"
-            textSize = 8.2f
-            letterSpacing = 0.08f
-            isSingleLine = true
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(safeColor("#94A3B8"))
+            text = "9 SERVERS • 350+ CATEGORIES • MULTI-EXTRACTOR"
+            textSize = 8.2f; letterSpacing = 0.08f; isSingleLine = true
+            setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor("#94A3B8"))
             setPadding(0, dp(ctx, 2), 0, 0)
         })
         titleRow.addView(titleCol)
         titleRow.addView(TextView(ctx).apply {
-            text = "⚡ PRO UI"
-            textSize = 9f
-            isSingleLine = true
-            setTypeface(typeface, Typeface.BOLD)
+            text = "⚡ TURBO FAST"
+            textSize = 9f; isSingleLine = true; setTypeface(typeface, Typeface.BOLD)
             setTextColor(safeColor("#6EE7B7"))
             background = tintBadgeBg("#10B981", dpf(ctx, 10f), 46, 130)
             setPadding(dp(ctx, 9), dp(ctx, 5), dp(ctx, 9), dp(ctx, 5))
@@ -1072,40 +1223,32 @@ object WatchOMoviesSettingsDialog {
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = dp(ctx, 11) }
         }
-        fun statChip(label: String, colorHex: String, marginEndDp: Int): Pair<LinearLayout, TextView> {
+        fun statChip(label: String, colorHex: String, endDp: Int): Pair<LinearLayout, TextView> {
             val box = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 background = glassCardBg("#0E1525", "#090D18", alphaColor(colorHex, 75), dpf(ctx, 12f), 2)
                 setPadding(dp(ctx, 10), dp(ctx, 7), dp(ctx, 10), dp(ctx, 7))
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    if (marginEndDp > 0) marginEnd = dp(ctx, marginEndDp)
+                    if (endDp > 0) marginEnd = dp(ctx, endDp)
                 }
             }
-            val valTv = TextView(ctx).apply {
-                text = "-"; textSize = 12.5f; isSingleLine = true; ellipsize = TextUtils.TruncateAt.END
-                setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor(colorHex))
-            }
-            val lblTv = TextView(ctx).apply {
-                text = label; textSize = 7.8f; letterSpacing = 0.08f; isSingleLine = true
-                setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor("#8A98B5"))
-                setPadding(0, dp(ctx, 1), 0, 0)
-            }
+            val valTv = TextView(ctx).apply { text = "-"; textSize = 13f; isSingleLine = true; setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor(colorHex)) }
+            val lblTv = TextView(ctx).apply { text = label; textSize = 7.8f; letterSpacing = 0.08f; isSingleLine = true; setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor("#8A98B5")); setPadding(0, dp(ctx, 1), 0, 0) }
             box.addView(valTv); box.addView(lblTv)
             return box to valTv
         }
-        val (catChip, catValTv) = statChip("CATEGORIES", "#38BDF8", 7)
-        val (domChip, domValTv) = statChip("DOMAIN", "#C084FC", 7)
-        val (cfChip, cfValTv) = statChip("CF SHIELD", "#34D399", 0)
-        statsRow.addView(catChip); statsRow.addView(domChip); statsRow.addView(cfChip)
+        val (srvChip, srvValTv) = statChip("SERVERS", "#38BDF8", 7)
+        val (extChip, extValTv) = statChip("EXTRACTORS", "#C084FC", 7)
+        val (spdChip, spdValTv) = statChip("SPEED", "#FBBF24", 0)
+        statsRow.addView(srvChip); statsRow.addView(extChip); statsRow.addView(spdChip)
         header.addView(statsRow)
         root.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(ctx, 10) })
 
         fun refreshStats() {
-            val activeCount = ALL_CATEGORIES.count { isCategoryEnabled(ctx, it) }
-            val domain = getCustomDomain(ctx)
-            catValTv.text = "$activeCount/${ALL_CATEGORIES.size}"
-            domValTv.text = extractHostKey(domain)
-            cfValTv.text = if (isDomainCfVerified(ctx, domain)) "VERIFIED ✓" else "READY"
+            val srvOn = SERVERS.count { isServerEnabled(it.key, ctx) }
+            srvValTv.text = "$srvOn/${SERVERS.size}"
+            extValTv.text = "${EXTRACTORS.count { isExtractorEnabled(it.key, ctx) }}/${EXTRACTORS.size}"
+            spdValTv.text = "${currentConcurrency}x • ${getPreferredQuality(ctx)}"
         }
         refreshStats()
 
@@ -1115,45 +1258,40 @@ object WatchOMoviesSettingsDialog {
             background = cardBg("#0C111D", "#1E2940", dpf(ctx, 14f), 2)
             setPadding(dp(ctx, 4), dp(ctx, 4), dp(ctx, 4), dp(ctx, 4))
         }
-        val tabTitles = listOf("📂 Categories", "🌐 Domain & UI", "🛡️ CF & Health")
+        val tabTitles = listOf("⚡ Servers", "🧩 Extractors", "🎛️ Filters & UI", "🛡️ CF & Health")
         val tabButtons = tabTitles.map { title ->
             Button(ctx).apply {
-                text = title; textSize = 10.8f; isAllCaps = false; isSingleLine = true
+                text = title; textSize = 10.5f; isAllCaps = false; isSingleLine = true
                 setTypeface(typeface, Typeface.BOLD)
-                setPadding(dp(ctx, 10), 0, dp(ctx, 10), 0)
-                layoutParams = LinearLayout.LayoutParams(0, dp(ctx, 35), 1f).apply { marginEnd = dp(ctx, 3) }
+                setPadding(dp(ctx, 11), 0, dp(ctx, 11), 0)
+                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(ctx, 35)).apply { marginEnd = dp(ctx, 3) }
                 attachPressAnim(this)
             }
         }
         tabButtons.forEach { tabBar.addView(it) }
-        root.addView(tabBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(ctx, 9) })
+        val tabScroll = HorizontalScrollView(ctx).apply { isHorizontalScrollBarEnabled = false; addView(tabBar) }
+        root.addView(tabScroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(ctx, 9) })
 
-        // ── Tab 1 Controls: Search + Group Chips ─────────────────────────────
+        // ── Tab 1 Controls: Search + Category Filter Chips ───────────────────
         val actionRow = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(ctx, 7) }
         }
         val searchBox = EditText(ctx).apply {
-            hint = "🔍 Search Ullu, Brazzers, Fliz..."
-            setHintTextColor(safeColor("#64748B"))
-            setTextColor(Color.WHITE)
-            textSize = 12f
-            isSingleLine = true
+            hint = "🔍 Search servers, domain..."
+            setHintTextColor(safeColor("#64748B")); setTextColor(Color.WHITE); textSize = 12f; isSingleLine = true
             background = cardBg("#0F1524", "#24314B", dpf(ctx, 12f), 2)
             setPadding(dp(ctx, 11), dp(ctx, 6), dp(ctx, 11), dp(ctx, 6))
             layoutParams = LinearLayout.LayoutParams(0, dp(ctx, 38), 1f).apply { marginEnd = dp(ctx, 6) }
         }
         val allOnBtn = Button(ctx).apply {
-            text = "ALL ON"; textSize = 9.5f; isSingleLine = true
-            setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
+            text = "ALL ON"; textSize = 9.5f; isSingleLine = true; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
             setPadding(dp(ctx, 10), 0, dp(ctx, 10), 0)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(ctx, 38)).apply { marginEnd = dp(ctx, 5) }
             attachPressAnim(this)
         }
         val allOffBtn = Button(ctx).apply {
-            text = "OFF"; textSize = 9.5f; isSingleLine = true
-            setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor("#CBD5E1"))
+            text = "OFF"; textSize = 9.5f; isSingleLine = true; setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor("#CBD5E1"))
             background = cardBg("#1A2234", "#2D3A54", dpf(ctx, 12f), 2)
             setPadding(dp(ctx, 10), 0, dp(ctx, 10), 0)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(ctx, 38))
@@ -1162,70 +1300,72 @@ object WatchOMoviesSettingsDialog {
         actionRow.addView(searchBox); actionRow.addView(allOnBtn); actionRow.addView(allOffBtn)
         root.addView(actionRow)
 
-        val groups = listOf("All", "General", "Indian OTT", "Studios 18+")
+        val categories = listOf("All", "Indian OTT", "Studios 18+", "Tubes", "Hindi")
         val chipRow = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(ctx, 8) }
         }
         val chipViews = mutableListOf<TextView>()
-        lateinit var applyCategoryFilter: () -> Unit
+        lateinit var applyServerFilter: () -> Unit
 
-        fun refreshGroupChips() {
+        fun refreshCategoryChips() {
             chipViews.forEachIndexed { idx, tv ->
-                val active = groups[idx] == selectedGroup
+                val active = categories[idx] == selectedCategory
                 tv.setTextColor(if (active) Color.WHITE else safeColor("#94A3B8"))
                 tv.background = if (active) neonGradBtn(activeTheme.primaryHex, dpf(ctx, 10f))
                 else cardBg("#111726", "#202A40", dpf(ctx, 10f), 1)
             }
         }
-        groups.forEach { grp ->
+        categories.forEach { cat ->
             val tv = TextView(ctx).apply {
-                text = grp; textSize = 10f; setTypeface(typeface, Typeface.BOLD)
+                text = cat; textSize = 10f; setTypeface(typeface, Typeface.BOLD)
                 setPadding(dp(ctx, 11), dp(ctx, 6), dp(ctx, 11), dp(ctx, 6))
                 layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = dp(ctx, 6) }
                 attachPressAnim(this)
-                setOnClickListener {
-                    selectedGroup = grp
-                    refreshGroupChips()
-                    applyCategoryFilter()
-                }
+                setOnClickListener { selectedCategory = cat; refreshCategoryChips(); applyServerFilter() }
             }
             chipViews.add(tv); chipRow.addView(tv)
         }
-        refreshGroupChips()
+        refreshCategoryChips()
         val chipScroll = HorizontalScrollView(ctx).apply { isHorizontalScrollBarEnabled = false; addView(chipRow) }
         root.addView(chipScroll)
 
         val screenH = ctx.resources.displayMetrics.heightPixels
         val contentHeight = (screenH * 0.43f).toInt().coerceIn(dp(ctx, 290), dp(ctx, 430))
 
-        lateinit var catAdapter: CategoryListAdapter
-        catAdapter = CategoryListAdapter(
+        lateinit var serverAdapter: ServerListAdapter
+        serverAdapter = ServerListAdapter(
             ctx = ctx,
             getAccentHex = { activeTheme.primaryHex },
             onToggleChanged = { refreshStats() },
-            onMoveUp = { cat ->
-                val order = getCategoryOrder(ctx).toMutableList()
-                val idx = order.indexOf(cat.key)
-                if (idx > 0) {
-                    order[idx] = order[idx - 1].also { order[idx - 1] = order[idx] }
-                    saveCategoryOrder(ctx, order)
-                    applyCategoryFilter()
+            onEditDomain = { srv ->
+                openDomainEditorDialog(ctx, srv, activeTheme.primaryHex) {
+                    applyServerFilter()
+                    onSettingsApplied?.invoke()
                 }
             },
-            onMoveDown = { cat ->
-                val order = getCategoryOrder(ctx).toMutableList()
-                val idx = order.indexOf(cat.key)
+            onMoveUp = { srv ->
+                val order = getServerOrder(ctx).toMutableList()
+                val idx = order.indexOf(srv.key)
+                if (idx > 0) {
+                    order[idx] = order[idx - 1].also { order[idx - 1] = order[idx] }
+                    saveServerOrder(ctx, order)
+                    applyServerFilter()
+                }
+            },
+            onMoveDown = { srv ->
+                val order = getServerOrder(ctx).toMutableList()
+                val idx = order.indexOf(srv.key)
                 if (idx in 0 until order.lastIndex) {
                     order[idx] = order[idx + 1].also { order[idx + 1] = order[idx] }
-                    saveCategoryOrder(ctx, order)
-                    applyCategoryFilter()
+                    saveServerOrder(ctx, order)
+                    applyServerFilter()
                 }
             }
         )
 
-        val catListView = ListView(ctx).apply {
-            adapter = catAdapter
+        val serversListView = ListView(ctx).apply {
+            adapter = serverAdapter
             divider = GradientDrawable().apply { setColor(Color.TRANSPARENT) }
             dividerHeight = dp(ctx, 7)
             overScrollMode = View.OVER_SCROLL_NEVER
@@ -1233,60 +1373,104 @@ object WatchOMoviesSettingsDialog {
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, contentHeight)
         }
 
-        applyCategoryFilter = {
-            val orderMap = getCategoryOrder(ctx).withIndex().associate { it.value to it.index }
-            val sorted = ALL_CATEGORIES.sortedBy { orderMap[it.key] ?: Int.MAX_VALUE }
+        applyServerFilter = {
+            val orderMap = getServerOrder(ctx).withIndex().associate { it.value to it.index }
+            val sorted = SERVERS.sortedBy { orderMap[it.key] ?: Int.MAX_VALUE }
             val filtered = sorted.filter { item ->
-                val grpOk = selectedGroup == "All" || item.group.equals(selectedGroup, true)
+                val catOk = when (selectedCategory) {
+                    "All" -> true
+                    "Hindi" -> item.isHindi
+                    else -> item.category.equals(selectedCategory, ignoreCase = true)
+                }
+                val dom = getServerDomain(item.key, ctx)
                 val qOk = currentQuery.isEmpty() ||
                     item.name.lowercase().contains(currentQuery) ||
-                    item.path.lowercase().contains(currentQuery) ||
-                    item.group.lowercase().contains(currentQuery)
-                grpOk && qOk
+                    item.tag.lowercase().contains(currentQuery) ||
+                    dom.lowercase().contains(currentQuery)
+                catOk && qOk
             }
-            catAdapter.submitList(filtered)
+            serverAdapter.submitList(filtered)
             refreshStats()
         }
-        applyCategoryFilter()
+        applyServerFilter()
 
         allOnBtn.setOnClickListener {
             val ed = prefs(ctx)?.edit()
-            ALL_CATEGORIES.filter { selectedGroup == "All" || it.group == selectedGroup }
-                .forEach { ed?.putBoolean("$KEY_CAT_PREFIX${it.key}", true) }
+            SERVERS.forEach { ed?.putBoolean("$KEY_SRV_PREFIX${it.key}", true) }
             ed?.apply()
-            applyCategoryFilter()
+            applyServerFilter()
         }
         allOffBtn.setOnClickListener {
             val ed = prefs(ctx)?.edit()
-            ALL_CATEGORIES.filter { selectedGroup == "All" || it.group == selectedGroup }
-                .forEach { ed?.putBoolean("$KEY_CAT_PREFIX${it.key}", false) }
+            SERVERS.forEach { ed?.putBoolean("$KEY_SRV_PREFIX${it.key}", false) }
             ed?.apply()
-            applyCategoryFilter()
+            applyServerFilter()
         }
         searchBox.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {
                 currentQuery = s?.toString().orEmpty().trim().lowercase()
-                applyCategoryFilter()
+                applyServerFilter()
             }
             override fun afterTextChanged(s: Editable?) {}
         })
 
-        // ── Scrollable Container for Tabs 2 & 3 ──────────────────────────────
+        // ── Scrollable Tabs 2, 3, 4 ──────────────────────────────────────────
         val scrollView = ScrollView(ctx).apply {
             isVerticalScrollBarEnabled = false
             visibility = View.GONE
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, contentHeight + dp(ctx, 76))
         }
         val wrapper = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
-        val domainUiPane = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
-        val cfHealthPane = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
+        val extractorPane = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
+        val streamPane = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
+        val healthPane = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
 
-        // Helper for toggle cards
-        fun makeToggleCard(parent: LinearLayout, title: String, desc: String, initial: Boolean, onChange: (Boolean) -> Unit): NeonSwitch {
+        // ── Tab 2: Extractors ────────────────────────────────────────────────
+        val extSec = makeSectionLabel(ctx, "Built-In & Custom Extractors", activeTheme.primaryHex)
+        themedSectionBars.add(extSec.getChildAt(0))
+        extractorPane.addView(extSec)
+
+        EXTRACTORS.forEachIndexed { idx, ext ->
+            val badgeAccent = AVATAR_PALETTE[idx % AVATAR_PALETTE.size]
             val card = LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                background = glassCardBg("#131A2B", "#0D121F", safeColor("#222D45"), dpf(ctx, 15f), 2)
+                setPadding(dp(ctx, 11), dp(ctx, 10), dp(ctx, 11), dp(ctx, 10))
+                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(ctx, 7) }
+            }
+            val col = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(ctx, 8) }
+            }
+            val headRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+            headRow.addView(TextView(ctx).apply {
+                text = ext.name; textSize = 12.5f; isSingleLine = true; ellipsize = TextUtils.TruncateAt.END
+                setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            headRow.addView(TextView(ctx).apply {
+                text = ext.tag; textSize = 8f; isSingleLine = true; setTypeface(typeface, Typeface.BOLD)
+                setTextColor(safeColor(badgeAccent))
+                background = tintBadgeBg(badgeAccent, dpf(ctx, 6f), 34, 85)
+                setPadding(dp(ctx, 6), dp(ctx, 2), dp(ctx, 6), dp(ctx, 2))
+                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = dp(ctx, 6) }
+            })
+            col.addView(headRow)
+            col.addView(TextView(ctx).apply { text = ext.hosts; textSize = 9.5f; setTextColor(safeColor("#7D8AA6")); setPadding(0, dp(ctx, 3), 0, 0) })
+            val sw = NeonSwitch(ctx, isExtractorEnabled(ext.key, ctx), activeTheme.primaryHex).apply {
+                onCheckedChange = { checked -> setExtractorEnabled(ctx, ext.key, checked); refreshStats() }
+            }
+            themedSwitches.add(sw)
+            card.setOnClickListener { sw.toggle() }
+            card.addView(col); card.addView(sw)
+            extractorPane.addView(card)
+        }
+
+        // ── Tab 3: Category Filters, Quality & Theme ─────────────────────────
+        fun makeToggleCard(parent: LinearLayout, title: String, desc: String, initial: Boolean, onChange: (Boolean) -> Unit) {
+            val card = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                 background = glassCardBg("#131A2B", "#0D121F", safeColor("#222D45"), dpf(ctx, 15f), 2)
                 setPadding(dp(ctx, 12), dp(ctx, 10), dp(ctx, 12), dp(ctx, 10))
                 layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(ctx, 7) }
@@ -1302,93 +1486,85 @@ object WatchOMoviesSettingsDialog {
             card.setOnClickListener { sw.toggle() }
             card.addView(col); card.addView(sw)
             parent.addView(card)
-            return sw
         }
 
-        // ── Tab 2: Domain & UI ───────────────────────────────────────────────
-        val domSec = makeSectionLabel(ctx, "🌐 Custom Domain / Mirror URL", activeTheme.primaryHex)
-        themedSectionBars.add(domSec.getChildAt(0))
-        domainUiPane.addView(domSec)
-
-        val domainCard = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            background = glassCardBg("#0E1A30", "#0A1120", alphaColor("#38BDF8", 115), dpf(ctx, 16f), 2)
-            setPadding(dp(ctx, 13), dp(ctx, 11), dp(ctx, 13), dp(ctx, 11))
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(ctx, 9) }
-        }
-        domainCard.addView(TextView(ctx).apply {
-            text = "Active Mirror Domain"
-            textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
-        })
-        domainCard.addView(TextView(ctx).apply {
-            text = "Site ka domain change ho jaye toh yahan naya URL daal kar bina plugin update chalayein."
-            textSize = 9.5f; setTextColor(safeColor("#8A9AB8")); setPadding(0, dp(ctx, 3), 0, dp(ctx, 8))
-        })
-        val domainInput = EditText(ctx).apply {
-            setText(getCustomDomain(ctx))
-            hint = DEFAULT_DOMAIN
-            setHintTextColor(safeColor("#64748B"))
-            setTextColor(Color.WHITE)
-            textSize = 12f
-            inputType = InputType.TYPE_TEXT_VARIATION_URI
-            isSingleLine = true
-            background = cardBg("#0B111E", "#263654", dpf(ctx, 11f), 2)
-            setPadding(dp(ctx, 11), dp(ctx, 8), dp(ctx, 11), dp(ctx, 8))
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ctx, 40)).apply { bottomMargin = dp(ctx, 8) }
-        }
-        val domBtnRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
-        domBtnRow.addView(Button(ctx).apply {
-            text = "✓ APPLY DOMAIN"
-            textSize = 10f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
-            background = neonGradBtn("#059669", dpf(ctx, 10f))
-            layoutParams = LinearLayout.LayoutParams(0, dp(ctx, 36), 1.3f).apply { marginEnd = dp(ctx, 6) }
-            attachPressAnim(this)
-            setOnClickListener {
-                setCustomDomain(ctx, domainInput.text.toString())
-                domainInput.setText(getCustomDomain(ctx))
-                refreshStats()
-                onSettingsApplied?.invoke()
-                safeToast(ctx, "Domain updated: ${getCustomDomain(ctx)}")
+        fun makeStepperCard(parent: LinearLayout, title: String, desc: String, initial: Int, step: Int, minVal: Int, maxVal: Int, suffix: String, onChange: (Int) -> Unit) {
+            var cur = initial
+            val card = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                background = glassCardBg("#131A2B", "#0D121F", safeColor("#222D45"), dpf(ctx, 15f), 2)
+                setPadding(dp(ctx, 12), dp(ctx, 10), dp(ctx, 12), dp(ctx, 10))
+                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(ctx, 7) }
             }
-        })
-        domBtnRow.addView(Button(ctx).apply {
-            text = "RESET DEFAULT"
-            textSize = 10f; setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor("#CBD5E1"))
-            background = cardBg("#1A2234", "#2D3A54", dpf(ctx, 10f), 1)
-            layoutParams = LinearLayout.LayoutParams(0, dp(ctx, 36), 1f)
-            attachPressAnim(this)
-            setOnClickListener {
-                setCustomDomain(ctx, DEFAULT_DOMAIN)
-                domainInput.setText(DEFAULT_DOMAIN)
-                refreshStats()
-                onSettingsApplied?.invoke()
-                safeToast(ctx, "Default domain restored")
+            val col = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(ctx, 8) }
             }
-        })
-        domainCard.addView(domainInput)
-        domainCard.addView(domBtnRow)
-        domainUiPane.addView(domainCard)
+            col.addView(TextView(ctx).apply { text = title; textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE) })
+            col.addView(TextView(ctx).apply { text = desc; textSize = 10f; setTextColor(safeColor("#7D8AA6")); setPadding(0, dp(ctx, 2), 0, 0) })
+            val valTv = TextView(ctx).apply {
+                text = "$cur$suffix"; textSize = 12.5f; gravity = Gravity.CENTER; minWidth = dp(ctx, 40)
+                setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
+            }
+            val minusBtn = TextView(ctx).apply {
+                text = "−"; textSize = 16f; gravity = Gravity.CENTER; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
+                background = cardBg("#1A2338", "#2C3B59", dpf(ctx, 9f), 1)
+                layoutParams = LinearLayout.LayoutParams(dp(ctx, 30), dp(ctx, 30))
+                attachPressAnim(this)
+                setOnClickListener { if (cur - step >= minVal) { cur -= step; valTv.text = "$cur$suffix"; onChange(cur) } }
+            }
+            val plusBtn = TextView(ctx).apply {
+                text = "+"; textSize = 16f; gravity = Gravity.CENTER; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
+                background = neonGradBtn(activeTheme.primaryHex, dpf(ctx, 9f))
+                layoutParams = LinearLayout.LayoutParams(dp(ctx, 30), dp(ctx, 30))
+                attachPressAnim(this)
+                setOnClickListener { if (cur + step <= maxVal) { cur += step; valTv.text = "$cur$suffix"; onChange(cur) } }
+            }
+            themedPlusBtns.add(plusBtn)
+            card.addView(col); card.addView(minusBtn); card.addView(valTv); card.addView(plusBtn)
+            parent.addView(card)
+        }
 
-        val grpSec = makeSectionLabel(ctx, "🎛️ Master Category Filters", activeTheme.primaryHex)
-        themedSectionBars.add(grpSec.getChildAt(0))
-        domainUiPane.addView(grpSec)
-
-        makeToggleCard(domainUiPane, "Latest & Movies", "Show Latest Updates & Movies on Home", isGroupEnabled(ctx, "General")) {
-            setGroupEnabled(ctx, "General", it); applyCategoryFilter()
+        val catSec = makeSectionLabel(ctx, "🎛️ Category Group Filters", activeTheme.primaryHex)
+        themedSectionBars.add(catSec.getChildAt(0))
+        streamPane.addView(catSec)
+        makeToggleCard(streamPane, "Indian OTT / Web Series", "WatchOMovies & TellyHD Indian (Ullu, PrimePlay, Alt, etc.)", isGroupEnabled("Indian OTT", ctx)) {
+            setGroupEnabled(ctx, "Indian OTT", it); applyServerFilter()
         }
-        makeToggleCard(domainUiPane, "Indian OTT / Web Series", "Ullu, Fliz, PrimePlay, MoodX, Kooku, etc.", isGroupEnabled(ctx, "Indian OTT")) {
-            setGroupEnabled(ctx, "Indian OTT", it); applyCategoryFilter()
+        makeToggleCard(streamPane, "International Studios (18+)", "BrazzPW, XMoviesForYou, WatchPorn, Taboodaddy, Pvzija", isGroupEnabled("Studios 18+", ctx)) {
+            setGroupEnabled(ctx, "Studios 18+", it); applyServerFilter()
         }
-        makeToggleCard(domainUiPane, "International Studios (18+)", "Brazzers, Bangbros, Vixen, Naughty America, etc.", isGroupEnabled(ctx, "Studios 18+")) {
-            setGroupEnabled(ctx, "Studios 18+", it); applyCategoryFilter()
+        makeToggleCard(streamPane, "Tubes & Models", "XXXTime & Free Porn Videos categories", isGroupEnabled("Tubes", ctx)) {
+            setGroupEnabled(ctx, "Tubes", it); applyServerFilter()
         }
-        makeToggleCard(domainUiPane, "Shuffle Home Categories", "Randomize category rows on every reload", isShuffleHome(ctx)) {
+        makeToggleCard(streamPane, "Hindi Providers Only 🇮🇳", "Sirf Hindi / Indian OTT servers dikhayein", isHindiOnly(ctx)) {
+            setHindiOnly(ctx, it); applyServerFilter()
+        }
+        makeToggleCard(streamPane, "Shuffle Home Rows", "Home page categories ko randomize karein", isShuffleHome(ctx)) {
             setShuffleHome(ctx, it)
         }
 
-        val themeSec = makeSectionLabel(ctx, "🎨 Appearance", activeTheme.primaryHex)
-        themedSectionBars.add(themeSec.getChildAt(0))
-        domainUiPane.addView(themeSec)
+        val qSec = makeSectionLabel(ctx, "🎞️ Video Quality Filters", activeTheme.primaryHex)
+        themedSectionBars.add(qSec.getChildAt(0))
+        streamPane.addView(qSec)
+        makeToggleCard(streamPane, "4K + 1440p UHD", "Ultra HD streams", isQuality4kEnabled(ctx)) { setQuality4kEnabled(ctx, it); refreshStats() }
+        makeToggleCard(streamPane, "1080p Full HD", "Full HD streams", isQuality1080Enabled(ctx)) { setQuality1080Enabled(ctx, it); refreshStats() }
+        makeToggleCard(streamPane, "720p HD", "Standard HD streams", isQuality720Enabled(ctx)) { setQuality720Enabled(ctx, it); refreshStats() }
+        makeToggleCard(streamPane, "480p & Below", "Data saver streams", isQuality480Enabled(ctx)) { setQuality480Enabled(ctx, it); refreshStats() }
+
+        val pSec = makeSectionLabel(ctx, "🚀 Performance Tuning", activeTheme.primaryHex)
+        themedSectionBars.add(pSec.getChildAt(0))
+        streamPane.addView(pSec)
+        makeStepperCard(streamPane, "Parallel Search Workers", "Concurrent server search threads", currentConcurrency, 1, 2, 15, "x") {
+            currentConcurrency = it; setConcurrency(ctx, it); refreshStats()
+        }
+        makeStepperCard(streamPane, "Request Timeout", "Per-server network timeout", currentTimeout, 5, 10, 60, "s") {
+            currentTimeout = it; setTimeoutSeconds(ctx, it)
+        }
+
+        val aSec = makeSectionLabel(ctx, "🎨 Appearance", activeTheme.primaryHex)
+        themedSectionBars.add(aSec.getChildAt(0))
+        streamPane.addView(aSec)
 
         val themeCard = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
@@ -1408,19 +1584,15 @@ object WatchOMoviesSettingsDialog {
                 val isSel = pal.id == activeTheme.id
                 chip.background = if (isSel) {
                     GradientDrawable().apply {
-                        setColor(alphaColor(pal.primaryHex, 70))
-                        cornerRadius = dpf(ctx, 10f)
+                        setColor(alphaColor(pal.primaryHex, 70)); cornerRadius = dpf(ctx, 10f)
                         setStroke(dp(ctx, 2), safeColor(pal.primaryHex))
                     }
-                } else {
-                    cardBg("#0F1523", "#222E46", dpf(ctx, 10f), 1)
-                }
+                } else cardBg("#0F1523", "#222E46", dpf(ctx, 10f), 1)
             }
         }
         UI_THEMES.forEach { pal ->
             val chip = LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(ctx, 10), dp(ctx, 6), dp(ctx, 11), dp(ctx, 6))
                 layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = dp(ctx, 6) }
                 attachPressAnim(this)
@@ -1430,21 +1602,15 @@ object WatchOMoviesSettingsDialog {
                 })
                 addView(TextView(ctx).apply { text = pal.name; textSize = 10.5f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE) })
                 setOnClickListener {
-                    activeTheme = pal
-                    setSelectedTheme(ctx, pal.id)
-                    applyThemeEverywhere()
-                    refreshThemeSwatches()
+                    activeTheme = pal; setSelectedTheme(ctx, pal.id); applyThemeEverywhere(); refreshThemeSwatches()
                 }
             }
-            themeChipMap[pal.id] = chip
-            themeRow.addView(chip)
+            themeChipMap[pal.id] = chip; themeRow.addView(chip)
         }
         refreshThemeSwatches()
-        themeScroll.addView(themeRow)
-        themeCard.addView(themeScroll)
-        domainUiPane.addView(themeCard)
+        themeScroll.addView(themeRow); themeCard.addView(themeScroll); streamPane.addView(themeCard)
 
-        // ── Tab 3: CF Shield & Health ────────────────────────────────────────
+        // ── Tab 4: CF Shield & Health ────────────────────────────────────────
         val cfBox = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             background = glassCardBg("#0B1D1E", "#081216", alphaColor("#10B981", 105), dpf(ctx, 16f), 2)
@@ -1453,49 +1619,32 @@ object WatchOMoviesSettingsDialog {
         }
         val cfHeader = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         cfHeader.addView(TextView(ctx).apply {
-            text = "🛡️ Cloudflare Shield"
-            textSize = 13.5f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
+            text = "🛡️ Cloudflare Shield (All 9 Servers)"
+            textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         })
 
         lateinit var refreshHealthPane: () -> Unit
 
         cfHeader.addView(Button(ctx).apply {
-            text = "⚡ Solve CF"
-            textSize = 9.5f; isAllCaps = false; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
+            text = "⚡ Solve All"; textSize = 9.5f; isAllCaps = false; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
             background = neonGradBtn("#059669", dpf(ctx, 9f))
-            setPadding(dp(ctx, 11), 0, dp(ctx, 11), 0)
+            setPadding(dp(ctx, 10), 0, dp(ctx, 10), 0)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(ctx, 32))
             attachPressAnim(this)
             setOnClickListener {
-                openCfBypassWindow(ctx, getCustomDomain(ctx)) {
-                    refreshHealthPane()
-                    refreshStats()
-                }
+                val targets = SERVERS.filter { isServerEnabled(it.key, ctx) }.ifEmpty { SERVERS }
+                openCfBypassQueue(ctx, targets) { refreshHealthPane(); applyServerFilter() }
             }
         })
         cfBox.addView(cfHeader)
         cfBox.addView(TextView(ctx).apply {
-            text = "403 / 503 Cloudflare error aane par WebView se verify karein ya 1-click me cookies reset karein."
+            text = "403 / 503 Cloudflare block aane par WebView se verify karein ya 1-click me cookies reset karein."
             textSize = 9.5f; setTextColor(safeColor("#8EA3B5")); setPadding(0, dp(ctx, 4), 0, dp(ctx, 8))
         })
 
-        val cfStatusBanner = TextView(ctx).apply {
-            textSize = 10.5f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
-            setPadding(dp(ctx, 10), dp(ctx, 8), dp(ctx, 10), dp(ctx, 8))
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(ctx, 8) }
-            attachPressAnim(this)
-            setOnClickListener {
-                openCfBypassWindow(ctx, getCustomDomain(ctx)) {
-                    refreshHealthPane()
-                    refreshStats()
-                }
-            }
-        }
-        cfBox.addView(cfStatusBanner)
-
         cfBox.addView(Button(ctx).apply {
-            text = "🗑️ Clear Cloudflare Cookies"
+            text = "🗑️ Clear Cloudflare Cookies (All Servers)"
             textSize = 10.5f; isAllCaps = false; setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor("#FCA5A5"))
             background = tintBadgeBg("#EF4444", dpf(ctx, 10f), 38, 115)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ctx, 37))
@@ -1504,48 +1653,38 @@ object WatchOMoviesSettingsDialog {
                 clearAllCfCookies(ctx)
                 onClearProviderCfCache?.invoke()
                 refreshHealthPane()
-                refreshStats()
-                safeToast(ctx, "Cloudflare cookies & cache cleared!")
+                safeToast(ctx, "All Cloudflare cookies & cache cleared!")
             }
         })
-        cfHealthPane.addView(cfBox)
+        healthPane.addView(cfBox)
 
-        makeToggleCard(cfHealthPane, "Use Saved WebView CF Cookies", "Attach solved cf_clearance cookie to requests", isUseWebViewCf(ctx)) {
+        makeToggleCard(healthPane, "Use Saved WebView CF Cookies", "Attach cf_clearance cookie to requests", isUseWebViewCf(ctx)) {
             setUseWebViewCf(ctx, it)
         }
-        makeToggleCard(cfHealthPane, "Auto-Retry on 403 / 503", "Clear CF killer & retry automatically on block", isCfAutoRetry(ctx)) {
+        makeToggleCard(healthPane, "Auto-Retry on 403 / 503", "Clear CF killer & retry automatically on block", isCfAutoRetry(ctx)) {
             setCfAutoRetry(ctx, it)
         }
 
-        // Domain Live Probe Card
-        val probeStatusTv = TextView(ctx).apply {
-            textSize = 10.5f; setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor("#94A3B8"))
-            setPadding(0, dp(ctx, 4), 0, dp(ctx, 8))
-        }
         val probeBtnRow = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(ctx, 9) }
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(ctx, 8) }
         }
-        val testDomBtn = Button(ctx).apply {
-            text = "⚡ TEST DOMAIN LIVE"
-            textSize = 10f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
-            background = neonGradBtn("#0284C7", dpf(ctx, 11f))
+        val testAllBtn = Button(ctx).apply {
+            text = "⚡ TEST ALL (${SERVERS.size})"; textSize = 9.8f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
+            background = neonGradBtn("#059669", dpf(ctx, 11f))
             layoutParams = LinearLayout.LayoutParams(0, dp(ctx, 36), 1.3f).apply { marginEnd = dp(ctx, 6) }
             attachPressAnim(this)
             setOnClickListener {
-                text = "TESTING..."
-                isEnabled = false
+                text = "TESTING..."; isEnabled = false
                 dialogScope.launch {
-                    probeDomainLive(ctx, getCustomDomain(ctx))
-                    text = "⚡ TEST DOMAIN LIVE"
-                    isEnabled = true
-                    refreshHealthPane()
+                    supervisorScope { SERVERS.map { srv -> async { probeServerLive(ctx, srv) } }.awaitAll() }
+                    text = "⚡ TEST ALL (${SERVERS.size})"; isEnabled = true
+                    refreshHealthPane(); applyServerFilter()
                 }
             }
         }
         val copyLogBtn = Button(ctx).apply {
-            text = "COPY LOGS"
-            textSize = 10f; setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor("#CBD5E1"))
+            text = "COPY LOGS"; textSize = 9.8f; setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor("#CBD5E1"))
             background = cardBg("#1A2234", "#2D3A54", dpf(ctx, 11f), 1)
             layoutParams = LinearLayout.LayoutParams(0, dp(ctx, 36), 0.9f)
             attachPressAnim(this)
@@ -1557,72 +1696,46 @@ object WatchOMoviesSettingsDialog {
                 }
             }
         }
-        probeBtnRow.addView(testDomBtn); probeBtnRow.addView(copyLogBtn)
+        probeBtnRow.addView(testAllBtn); probeBtnRow.addView(copyLogBtn)
+        healthPane.addView(probeBtnRow)
 
         val logSec = makeSectionLabel(ctx, "Live Console Output", activeTheme.primaryHex)
         themedSectionBars.add(logSec.getChildAt(0))
         val logTv = TextView(ctx).apply {
-            textSize = 9.2f
-            typeface = Typeface.MONOSPACE
-            setTextColor(safeColor("#CBD5E1"))
+            textSize = 9.2f; typeface = Typeface.MONOSPACE; setTextColor(safeColor("#CBD5E1"))
             background = cardBg("#060911", "#1E2A42", dpf(ctx, 13f), 2)
             setPadding(dp(ctx, 11), dp(ctx, 10), dp(ctx, 11), dp(ctx, 10))
         }
-
-        cfHealthPane.addView(probeStatusTv)
-        cfHealthPane.addView(probeBtnRow)
-        cfHealthPane.addView(logSec)
-        cfHealthPane.addView(logTv)
+        healthPane.addView(logSec); healthPane.addView(logTv)
 
         refreshHealthPane = {
-            val dom = getCustomDomain(ctx)
-            if (isDomainCfVerified(ctx, dom)) {
-                cfStatusBanner.text = "✓ CF Cookie Active for ${extractHostKey(dom)}"
-                cfStatusBanner.setTextColor(safeColor("#6EE7B7"))
-                cfStatusBanner.background = tintBadgeBg("#10B981", dpf(ctx, 10f), 42, 120)
-            } else {
-                cfStatusBanner.text = "⚡ No CF Cookie — Tap Here to Solve for ${extractHostKey(dom)}"
-                cfStatusBanner.setTextColor(safeColor("#93C5FD"))
-                cfStatusBanner.background = tintBadgeBg("#2563EB", dpf(ctx, 10f), 42, 120)
-            }
-            val h = lastDomainHealth
-            probeStatusTv.text = if (h != null) {
-                "Last Probe: ${h.status} • ${h.latencyMs}ms (${h.updatedAt})"
-            } else {
-                "Target: $dom • Tap Test Domain Live to check latency"
-            }
-            probeStatusTv.setTextColor(safeColor(when {
-                h == null -> "#94A3B8"
-                h.isHealthy -> "#34D399"
-                else -> "#F87171"
-            }))
             logTv.text = if (diagLogs.isEmpty()) {
-                "> Ready • ADB Tag: $LOG_TAG"
+                "> Ready • 9 Servers Loaded • Tag: $LOG_TAG"
             } else {
-                diagLogs.asReversed().take(50).joinToString("\n")
+                diagLogs.asReversed().take(60).joinToString("\n")
             }
         }
         refreshHealthPane()
 
-        val scrollPanes = listOf(domainUiPane, cfHealthPane)
+        val scrollPanes = listOf(extractorPane, streamPane, healthPane)
         scrollPanes.forEach { wrapper.addView(it) }
         scrollView.addView(wrapper)
 
         fun selectTab(idx: Int) {
             activeTabIdx = idx
             if (idx == 0) {
-                catListView.visibility = View.VISIBLE
+                serversListView.visibility = View.VISIBLE
                 actionRow.visibility = View.VISIBLE
                 chipScroll.visibility = View.VISIBLE
                 scrollView.visibility = View.GONE
             } else {
-                catListView.visibility = View.GONE
+                serversListView.visibility = View.GONE
                 actionRow.visibility = View.GONE
                 chipScroll.visibility = View.GONE
                 scrollView.visibility = View.VISIBLE
                 scrollView.scrollTo(0, 0)
                 scrollPanes.forEachIndexed { i, p -> p.visibility = if (i == idx - 1) View.VISIBLE else View.GONE }
-                if (idx == 2) refreshHealthPane()
+                if (idx == 3) refreshHealthPane()
             }
             tabButtons.forEachIndexed { i, btn ->
                 if (i == idx) {
@@ -1636,24 +1749,19 @@ object WatchOMoviesSettingsDialog {
         }
         tabButtons.forEachIndexed { i, btn -> btn.setOnClickListener { selectTab(i) } }
 
-        root.addView(catListView)
-        root.addView(scrollView)
+        root.addView(serversListView); root.addView(scrollView)
 
         val dialog = AlertDialog.Builder(ctx).setView(root).create()
         dialog.setOnDismissListener { runCatching { dialogScope.cancel() } }
 
-        // Footer Divider & Action Buttons
         root.addView(View(ctx).apply {
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ctx, 1)).apply {
-                topMargin = dp(ctx, 10); bottomMargin = dp(ctx, 9)
-            }
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ctx, 1)).apply { topMargin = dp(ctx, 10); bottomMargin = dp(ctx, 9) }
             setBackgroundColor(safeColor("#1C263B"))
         })
 
         val footer = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
         val resetBtn = Button(ctx).apply {
-            text = "RESET ALL"
-            textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor("#CBD5E1"))
+            text = "RESET ALL"; textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor("#CBD5E1"))
             background = cardBg("#151C2C", "#2A3652", dpf(ctx, 13f), 2)
             layoutParams = LinearLayout.LayoutParams(0, dp(ctx, 42), 1f).apply { marginEnd = dp(ctx, 8) }
             attachPressAnim(this)
@@ -1662,48 +1770,44 @@ object WatchOMoviesSettingsDialog {
                 clearAllCfCookies(ctx)
                 onClearProviderCfCache?.invoke()
                 onSettingsApplied?.invoke()
-                safeToast(ctx, "All settings reset to default")
+                safeToast(ctx, "All settings reset")
                 runCatching { dialog.dismiss() }
             }
         }
         val saveApplyBtn = Button(ctx).apply {
-            text = "SAVE & APPLY"
-            textSize = 11.5f; letterSpacing = 0.04f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
+            text = "SAVE & APPLY"; textSize = 11.5f; letterSpacing = 0.04f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
             layoutParams = LinearLayout.LayoutParams(0, dp(ctx, 42), 1.4f).apply { marginStart = dp(ctx, 4) }
             attachPressAnim(this)
             setOnClickListener {
-                setCustomDomain(ctx, domainInput.text.toString())
                 setSelectedTheme(ctx, activeTheme.id)
                 onSettingsApplied?.invoke()
-                safeToast(ctx, "Settings saved! Restart app if Home rows don't refresh.")
+                safeToast(ctx, "Settings saved! Restart app if Home rows don't update.")
                 runCatching { dialog.dismiss() }
             }
         }
-        footer.addView(resetBtn); footer.addView(saveApplyBtn)
-        root.addView(footer)
+        footer.addView(resetBtn); footer.addView(saveApplyBtn); root.addView(footer)
 
-        // Live Theme Applier
         applyThemeEverywhere = {
             root.background = glassCardBg("#090D18", "#05070E", alphaColor(activeTheme.primaryHex, 95), dpf(ctx, 24f), 3)
             header.background = GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
                 intArrayOf(safeColor(activeTheme.gradStart), safeColor(activeTheme.gradMid), safeColor(activeTheme.gradEnd))
             ).apply {
-                cornerRadius = dpf(ctx, 18f)
-                setStroke(2, alphaColor(activeTheme.primaryHex, 175))
+                cornerRadius = dpf(ctx, 18f); setStroke(2, alphaColor(activeTheme.primaryHex, 175))
             }
             allOnBtn.background = neonGradBtn(activeTheme.primaryHex, dpf(ctx, 12f))
             saveApplyBtn.background = neonGradBtn(activeTheme.primaryHex, dpf(ctx, 13f))
             themedSwitches.forEach { it.updateAccent(activeTheme.primaryHex) }
+            themedPlusBtns.forEach { it.background = neonGradBtn(activeTheme.primaryHex, dpf(ctx, 9f)) }
             themedSectionBars.forEach { it.background = pillBg(activeTheme.primaryHex, 4f) }
-            refreshGroupChips()
+            refreshCategoryChips()
             tabButtons.forEachIndexed { i, btn ->
                 if (i == activeTabIdx) {
                     btn.background = neonGradBtn(activeTheme.primaryHex, dpf(ctx, 11f))
                     btn.setTextColor(Color.WHITE)
                 }
             }
-            catAdapter.notifyDataSetChanged()
+            serverAdapter.notifyDataSetChanged()
         }
 
         applyThemeEverywhere()
