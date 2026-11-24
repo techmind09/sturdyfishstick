@@ -1,4 +1,4 @@
-package com.sturdyfishstick.watchomoviesindian
+package com.sturdyfishstick.watchomovies
 
 import com.lagradost.cloudstream3.CloudStreamApp
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
@@ -13,6 +13,22 @@ class WatchOMoviesPlugin : Plugin() {
         provider.applySavedSettings()
         registerMainAPI(provider)
 
+        // Register all custom extractors
+        registerExtractorAPI(LuluCustomStream())
+        registerExtractorAPI(LuluVidCustom())
+        registerExtractorAPI(LuluVdo())
+        registerExtractorAPI(LuluPvp())
+        registerExtractorAPI(Vidsp())
+        registerExtractorAPI(VidHideplus())
+        registerExtractorAPI(VidHidedht())
+        registerExtractorAPI(Vidhidehub())
+        registerExtractorAPI(Vidhidetoul())
+        registerExtractorAPI(Xtapes())
+        registerExtractorAPI(FilemoonCustom())
+        registerExtractorAPI(Ds2play())
+        registerExtractorAPI(Bigwarp())
+
+        // Connect MovieFox-style Settings Dialog
         openSettings = { ctx ->
             WatchOMoviesSettingsDialog.show(
                 rawCtx = ctx,
