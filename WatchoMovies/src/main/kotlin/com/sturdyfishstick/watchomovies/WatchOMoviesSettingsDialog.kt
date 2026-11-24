@@ -55,7 +55,7 @@ import java.util.concurrent.atomic.AtomicInteger
 object WatchOMoviesSettingsDialog {
 
     const val LOG_TAG = "WatchOMoviesDiag"
-    private const val PREFS_NAME = "watchomovies_master_ultra_v2"
+    private const val PREFS_NAME = "watchomovies_master_ultra_v3"
     private const val CF_VERIFIED_MARKER = "__CF_VERIFIED__"
 
     private const val KEY_SRV_PREFIX = "wom_srv_"
@@ -73,6 +73,7 @@ object WatchOMoviesSettingsDialog {
     private const val KEY_GRP_TUBES = "wom_grp_tubes"
     private const val KEY_HINDI_ONLY = "wom_hindi_only"
     private const val KEY_SHUFFLE_HOME = "wom_shuffle_home"
+    private const val KEY_ROWS_PER_SERVER = "wom_rows_per_server"
 
     // Quality & Performance
     private const val KEY_Q_4K = "wom_q_4k"
@@ -252,6 +253,13 @@ object WatchOMoviesSettingsDialog {
         prefs(ctx)?.edit()?.putBoolean(KEY_SHUFFLE_HOME, enabled)?.apply()
     }
 
+    fun getRowsPerServer(ctx: Context? = appContext): Int =
+        prefs(ctx)?.getInt(KEY_ROWS_PER_SERVER, 5) ?: 5
+
+    fun setRowsPerServer(ctx: Context, count: Int) {
+        prefs(ctx)?.edit()?.putInt(KEY_ROWS_PER_SERVER, count.coerceIn(2, 60))?.apply()
+    }
+
     fun isServerRawChecked(key: String, ctx: Context? = appContext): Boolean =
         prefs(ctx)?.getBoolean("$KEY_SRV_PREFIX${key.lowercase()}", true) ?: true
 
@@ -313,11 +321,11 @@ object WatchOMoviesSettingsDialog {
         else -> "AUTO"
     }
 
-    fun getConcurrency(ctx: Context? = appContext): Int = prefs(ctx)?.getInt(KEY_CONCURRENCY, 9) ?: 9
-    fun setConcurrency(ctx: Context, v: Int) = prefs(ctx)?.edit()?.putInt(KEY_CONCURRENCY, v.coerceIn(2, 20))?.apply()
+    fun getConcurrency(ctx: Context? = appContext): Int = prefs(ctx)?.getInt(KEY_CONCURRENCY, 6) ?: 6
+    fun setConcurrency(ctx: Context, v: Int) = prefs(ctx)?.edit()?.putInt(KEY_CONCURRENCY, v.coerceIn(2, 15))?.apply()
 
-    fun getTimeoutSeconds(ctx: Context? = appContext): Int = prefs(ctx)?.getInt(KEY_TIMEOUT_SEC, 25) ?: 25
-    fun setTimeoutSeconds(ctx: Context, v: Int) = prefs(ctx)?.edit()?.putInt(KEY_TIMEOUT_SEC, v.coerceIn(10, 60))?.apply()
+    fun getTimeoutSeconds(ctx: Context? = appContext): Int = prefs(ctx)?.getInt(KEY_TIMEOUT_SEC, 12) ?: 12
+    fun setTimeoutSeconds(ctx: Context, v: Int) = prefs(ctx)?.edit()?.putInt(KEY_TIMEOUT_SEC, v.coerceIn(5, 45))?.apply()
 
     fun isUseWebViewCf(ctx: Context? = appContext): Boolean = prefs(ctx)?.getBoolean(KEY_USE_WEBVIEW_CF, true) ?: true
     fun setUseWebViewCf(ctx: Context, v: Boolean) = prefs(ctx)?.edit()?.putBoolean(KEY_USE_WEBVIEW_CF, v)?.apply()
@@ -384,7 +392,7 @@ object WatchOMoviesSettingsDialog {
     private suspend fun probeServerLive(ctx: Context, srv: ServerItem): ServerHealthInfo = withContext(Dispatchers.IO) {
         val start = System.currentTimeMillis()
         val targetUrl = getServerDomain(srv.key, ctx)
-        val tMs = (getTimeoutSeconds(ctx)).coerceIn(8, 15) * 1000
+        val tMs = (getTimeoutSeconds(ctx)).coerceIn(5, 12) * 1000
         try {
             val conn = (URL("$targetUrl/").openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
@@ -407,7 +415,7 @@ object WatchOMoviesSettingsDialog {
             }
             val info = ServerHealthInfo(srv.key, status, ok, code, ms, targetUrl, nowTs())
             serverHealthMap[srv.key] = info
-            if (!ok) logDiag("CF", "${srv.name}: $status ($targetUrl)")
+            logDiag(if (ok) "PROBE" else "CF", "${srv.name}: $status (${ms}ms)")
             info
         } catch (e: Exception) {
             val ms = System.currentTimeMillis() - start
@@ -719,7 +727,7 @@ object WatchOMoviesSettingsDialog {
     }
 
     // =========================================================================
-    // Multi-Server WebView Cloudflare Solver (MovieFox Queue Engine)
+    // Multi-Server WebView Cloudflare Solver
     // =========================================================================
     @SuppressLint("SetJavaScriptEnabled")
     fun openCfBypassQueue(
@@ -937,7 +945,7 @@ object WatchOMoviesSettingsDialog {
     }
 
     // =========================================================================
-    // Server List Adapter (Monogram + Live Status + Domain Edit + Order + Switch)
+    // Server List Adapter
     // =========================================================================
     private class ServerListAdapter(
         private val ctx: Context,
@@ -1037,13 +1045,9 @@ object WatchOMoviesSettingsDialog {
                 }
                 col.addView(nameTv); col.addView(badgeLine); col.addView(urlTv)
 
-                // Edit Domain Button
                 val editBtn = TextView(ctx).apply {
-                    text = "URL"
-                    textSize = 8.5f
-                    gravity = Gravity.CENTER
-                    setTypeface(typeface, Typeface.BOLD)
-                    setTextColor(safeColor("#93C5FD"))
+                    text = "URL"; textSize = 8.5f; gravity = Gravity.CENTER
+                    setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor("#93C5FD"))
                     background = tintBadgeBg("#2563EB", dpf(ctx, 7f), 36, 95)
                     setPadding(dp(ctx, 6), dp(ctx, 6), dp(ctx, 6), dp(ctx, 6))
                     layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
@@ -1052,7 +1056,6 @@ object WatchOMoviesSettingsDialog {
                     attachPressAnim(this)
                 }
 
-                // Order Arrows
                 val orderCol = LinearLayout(ctx).apply {
                     orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
                     layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
@@ -1176,6 +1179,7 @@ object WatchOMoviesSettingsDialog {
         var selectedCategory = "All"
         var currentConcurrency = getConcurrency(ctx)
         var currentTimeout = getTimeoutSeconds(ctx)
+        var currentRowsPerServer = getRowsPerServer(ctx)
         var activeTabIdx = 0
 
         val themedSwitches = mutableListOf<NeonSwitch>()
@@ -1239,7 +1243,7 @@ object WatchOMoviesSettingsDialog {
         }
         val (srvChip, srvValTv) = statChip("SERVERS", "#38BDF8", 7)
         val (extChip, extValTv) = statChip("EXTRACTORS", "#C084FC", 7)
-        val (spdChip, spdValTv) = statChip("SPEED", "#FBBF24", 0)
+        val (spdChip, spdValTv) = statChip("HOME ROWS", "#FBBF24", 0)
         statsRow.addView(srvChip); statsRow.addView(extChip); statsRow.addView(spdChip)
         header.addView(statsRow)
         root.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(ctx, 10) })
@@ -1248,7 +1252,7 @@ object WatchOMoviesSettingsDialog {
             val srvOn = SERVERS.count { isServerEnabled(it.key, ctx) }
             srvValTv.text = "$srvOn/${SERVERS.size}"
             extValTv.text = "${EXTRACTORS.count { isExtractorEnabled(it.key, ctx) }}/${EXTRACTORS.size}"
-            spdValTv.text = "${currentConcurrency}x • ${getPreferredQuality(ctx)}"
+            spdValTv.text = if (currentRowsPerServer >= 60) "ALL" else "${currentRowsPerServer}/srv"
         }
         refreshStats()
 
@@ -1341,6 +1345,7 @@ object WatchOMoviesSettingsDialog {
             onEditDomain = { srv ->
                 openDomainEditorDialog(ctx, srv, activeTheme.primaryHex) {
                     applyServerFilter()
+                    onClearProviderCfCache?.invoke()
                     onSettingsApplied?.invoke()
                 }
             },
@@ -1503,7 +1508,8 @@ object WatchOMoviesSettingsDialog {
             col.addView(TextView(ctx).apply { text = title; textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE) })
             col.addView(TextView(ctx).apply { text = desc; textSize = 10f; setTextColor(safeColor("#7D8AA6")); setPadding(0, dp(ctx, 2), 0, 0) })
             val valTv = TextView(ctx).apply {
-                text = "$cur$suffix"; textSize = 12.5f; gravity = Gravity.CENTER; minWidth = dp(ctx, 40)
+                text = if (maxVal == 60 && cur >= 60) "ALL" else "$cur$suffix"
+                textSize = 12.5f; gravity = Gravity.CENTER; minWidth = dp(ctx, 40)
                 setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
             }
             val minusBtn = TextView(ctx).apply {
@@ -1511,14 +1517,26 @@ object WatchOMoviesSettingsDialog {
                 background = cardBg("#1A2338", "#2C3B59", dpf(ctx, 9f), 1)
                 layoutParams = LinearLayout.LayoutParams(dp(ctx, 30), dp(ctx, 30))
                 attachPressAnim(this)
-                setOnClickListener { if (cur - step >= minVal) { cur -= step; valTv.text = "$cur$suffix"; onChange(cur) } }
+                setOnClickListener {
+                    if (cur - step >= minVal) {
+                        cur -= step
+                        valTv.text = "$cur$suffix"
+                        onChange(cur)
+                    }
+                }
             }
             val plusBtn = TextView(ctx).apply {
                 text = "+"; textSize = 16f; gravity = Gravity.CENTER; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
                 background = neonGradBtn(activeTheme.primaryHex, dpf(ctx, 9f))
                 layoutParams = LinearLayout.LayoutParams(dp(ctx, 30), dp(ctx, 30))
                 attachPressAnim(this)
-                setOnClickListener { if (cur + step <= maxVal) { cur += step; valTv.text = "$cur$suffix"; onChange(cur) } }
+                setOnClickListener {
+                    if (cur + step <= maxVal) {
+                        cur += step
+                        valTv.text = if (maxVal == 60 && cur >= 60) "ALL" else "$cur$suffix"
+                        onChange(cur)
+                    }
+                }
             }
             themedPlusBtns.add(plusBtn)
             card.addView(col); card.addView(minusBtn); card.addView(valTv); card.addView(plusBtn)
@@ -1544,23 +1562,26 @@ object WatchOMoviesSettingsDialog {
             setShuffleHome(ctx, it)
         }
 
+        val pSec = makeSectionLabel(ctx, "🚀 Speed & Home Load Control", activeTheme.primaryHex)
+        themedSectionBars.add(pSec.getChildAt(0))
+        streamPane.addView(pSec)
+        makeStepperCard(streamPane, "Home Rows Per Server", "Har server se top rows (5 = fast, 60 = All 350)", currentRowsPerServer, 2, 2, 60, "") {
+            currentRowsPerServer = it; setRowsPerServer(ctx, it); refreshStats()
+        }
+        makeStepperCard(streamPane, "Parallel Search Workers", "Concurrent server search threads", currentConcurrency, 1, 2, 15, "x") {
+            currentConcurrency = it; setConcurrency(ctx, it)
+        }
+        makeStepperCard(streamPane, "Request Timeout", "Per-server network timeout", currentTimeout, 2, 5, 45, "s") {
+            currentTimeout = it; setTimeoutSeconds(ctx, it)
+        }
+
         val qSec = makeSectionLabel(ctx, "🎞️ Video Quality Filters", activeTheme.primaryHex)
         themedSectionBars.add(qSec.getChildAt(0))
         streamPane.addView(qSec)
-        makeToggleCard(streamPane, "4K + 1440p UHD", "Ultra HD streams", isQuality4kEnabled(ctx)) { setQuality4kEnabled(ctx, it); refreshStats() }
-        makeToggleCard(streamPane, "1080p Full HD", "Full HD streams", isQuality1080Enabled(ctx)) { setQuality1080Enabled(ctx, it); refreshStats() }
-        makeToggleCard(streamPane, "720p HD", "Standard HD streams", isQuality720Enabled(ctx)) { setQuality720Enabled(ctx, it); refreshStats() }
-        makeToggleCard(streamPane, "480p & Below", "Data saver streams", isQuality480Enabled(ctx)) { setQuality480Enabled(ctx, it); refreshStats() }
-
-        val pSec = makeSectionLabel(ctx, "🚀 Performance Tuning", activeTheme.primaryHex)
-        themedSectionBars.add(pSec.getChildAt(0))
-        streamPane.addView(pSec)
-        makeStepperCard(streamPane, "Parallel Search Workers", "Concurrent server search threads", currentConcurrency, 1, 2, 15, "x") {
-            currentConcurrency = it; setConcurrency(ctx, it); refreshStats()
-        }
-        makeStepperCard(streamPane, "Request Timeout", "Per-server network timeout", currentTimeout, 5, 10, 60, "s") {
-            currentTimeout = it; setTimeoutSeconds(ctx, it)
-        }
+        makeToggleCard(streamPane, "4K + 1440p UHD", "Ultra HD streams", isQuality4kEnabled(ctx)) { setQuality4kEnabled(ctx, it) }
+        makeToggleCard(streamPane, "1080p Full HD", "Full HD streams", isQuality1080Enabled(ctx)) { setQuality1080Enabled(ctx, it) }
+        makeToggleCard(streamPane, "720p HD", "Standard HD streams", isQuality720Enabled(ctx)) { setQuality720Enabled(ctx, it) }
+        makeToggleCard(streamPane, "480p & Below", "Data saver streams", isQuality480Enabled(ctx)) { setQuality480Enabled(ctx, it) }
 
         val aSec = makeSectionLabel(ctx, "🎨 Appearance", activeTheme.primaryHex)
         themedSectionBars.add(aSec.getChildAt(0))
@@ -1644,7 +1665,7 @@ object WatchOMoviesSettingsDialog {
         })
 
         cfBox.addView(Button(ctx).apply {
-            text = "🗑️ Clear Cloudflare Cookies (All Servers)"
+            text = "🗑️ Clear Cloudflare Cookies & Dead Host Cache"
             textSize = 10.5f; isAllCaps = false; setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor("#FCA5A5"))
             background = tintBadgeBg("#EF4444", dpf(ctx, 10f), 38, 115)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ctx, 37))
@@ -1653,7 +1674,7 @@ object WatchOMoviesSettingsDialog {
                 clearAllCfCookies(ctx)
                 onClearProviderCfCache?.invoke()
                 refreshHealthPane()
-                safeToast(ctx, "All Cloudflare cookies & cache cleared!")
+                safeToast(ctx, "CF cookies & dead host cache cleared!")
             }
         })
         healthPane.addView(cfBox)
@@ -1676,6 +1697,7 @@ object WatchOMoviesSettingsDialog {
             attachPressAnim(this)
             setOnClickListener {
                 text = "TESTING..."; isEnabled = false
+                onClearProviderCfCache?.invoke()
                 dialogScope.launch {
                     supervisorScope { SERVERS.map { srv -> async { probeServerLive(ctx, srv) } }.awaitAll() }
                     text = "⚡ TEST ALL (${SERVERS.size})"; isEnabled = true
@@ -1780,6 +1802,7 @@ object WatchOMoviesSettingsDialog {
             attachPressAnim(this)
             setOnClickListener {
                 setSelectedTheme(ctx, activeTheme.id)
+                onClearProviderCfCache?.invoke()
                 onSettingsApplied?.invoke()
                 safeToast(ctx, "Settings saved! Restart app if Home rows don't update.")
                 runCatching { dialog.dismiss() }
