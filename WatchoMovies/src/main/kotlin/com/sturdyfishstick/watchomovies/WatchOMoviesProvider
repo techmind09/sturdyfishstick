@@ -12,7 +12,7 @@ import org.jsoup.nodes.Element
 import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 
-class WatchOMoviesIndianProvider : MainAPI() {
+class WatchOMoviesProvider : MainAPI() {
     override var mainUrl              = "https://watchomovies.social"
     override var name                 = "WatchOMovies"
     override val hasMainPage          = true
