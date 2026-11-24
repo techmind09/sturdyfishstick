@@ -55,7 +55,7 @@ import java.util.concurrent.atomic.AtomicInteger
 object WatchOMoviesSettingsDialog {
 
     const val LOG_TAG = "WatchOMoviesDiag"
-    private const val PREFS_NAME = "watchomovies_master_ultra_v3"
+    private const val PREFS_NAME = "watchomovies_master_ultra_v4"
     private const val CF_VERIFIED_MARKER = "__CF_VERIFIED__"
 
     private const val KEY_SRV_PREFIX = "wom_srv_"
@@ -109,8 +109,7 @@ object WatchOMoviesSettingsDialog {
         val tag: String,
         val defaultUrl: String,
         val accentHex: String,
-        val isHindi: Boolean,
-        val category: String // Indian OTT, Studios 18+, Tubes
+        val groups: Set<String> // "Indian OTT", "Studios 18+", "Tubes"
     )
 
     data class ExtractorItem(
@@ -131,15 +130,15 @@ object WatchOMoviesSettingsDialog {
     )
 
     val SERVERS = listOf(
-        ServerItem("watchomovies", "WatchOMovies", "OTT/HLS", "https://watchomovies.social", "#F43F5E", true, "Indian OTT"),
-        ServerItem("tellyhd", "TellyHD Indian", "DOO/M3U8", "https://tellyhd.eu", "#FB7185", true, "Indian OTT"),
-        ServerItem("brazzpw", "BrazzPW", "HLS/SUB", "https://brazzpw.xyz", "#38BDF8", false, "Studios 18+"),
-        ServerItem("xmoviesforyou", "XMoviesForYou", "STUDIOS", "https://xmoviesforyou.com", "#A855F7", false, "Studios 18+"),
-        ServerItem("xxxtime", "XXXTime", "LULU/M3U8", "https://xxxtime.video", "#F59E0B", false, "Tubes"),
-        ServerItem("watchporn", "WatchPorn", "KT/MP4", "https://watchporn.to", "#10B981", false, "Studios 18+"),
-        ServerItem("taboodaddy", "Taboodaddy", "TWIMG/HLS", "https://taboodaddy.com", "#EC4899", false, "Studios 18+"),
-        ServerItem("pvzija", "Pvzija (BluMovies)", "CF/MULTI", "https://xxxparodyhd.net", "#22D3EE", false, "Studios 18+"),
-        ServerItem("freepornvideos", "Free Porn Videos", "MP4/HD", "https://www.freepornvideos.xxx", "#FACC15", false, "Tubes")
+        ServerItem("watchomovies", "WatchOMovies", "OTT + STUDIOS", "https://watchomovies.social", "#F43F5E", setOf("Indian OTT", "Studios 18+", "Tubes")),
+        ServerItem("tellyhd", "TellyHD Indian", "INDIAN OTT", "https://tellyhd.eu", "#FB7185", setOf("Indian OTT")),
+        ServerItem("brazzpw", "BrazzPW", "STUDIOS + TUBE", "https://brazzpw.xyz", "#38BDF8", setOf("Studios 18+", "Tubes")),
+        ServerItem("xmoviesforyou", "XMoviesForYou", "53 STUDIOS", "https://xmoviesforyou.com", "#A855F7", setOf("Studios 18+")),
+        ServerItem("xxxtime", "XXXTime", "CHANNELS + TUBE", "https://xxxtime.video", "#F59E0B", setOf("Studios 18+", "Tubes")),
+        ServerItem("watchporn", "WatchPorn", "STUDIOS + TUBE", "https://watchporn.to", "#10B981", setOf("Studios 18+", "Tubes")),
+        ServerItem("taboodaddy", "Taboodaddy", "STUDIOS + TUBE", "https://taboodaddy.com", "#EC4899", setOf("Studios 18+", "Tubes")),
+        ServerItem("pvzija", "Pvzija (BluMovies)", "40 STUDIOS", "https://xxxparodyhd.net", "#22D3EE", setOf("Indian OTT", "Studios 18+", "Tubes")),
+        ServerItem("freepornvideos", "Free Porn Videos", "TUBE", "https://www.freepornvideos.xxx", "#FACC15", setOf("Tubes"))
     )
 
     val EXTRACTORS = listOf(
@@ -187,7 +186,7 @@ object WatchOMoviesSettingsDialog {
     }
 
     // =========================================================================
-    // Persistent Getters & Setters (Domains, Filters, Toggles, Cookies)
+    // Persistent Getters & Setters (Domains, Category Groups, Toggles, Cookies)
     // =========================================================================
     fun getServerDomain(serverKey: String, ctx: Context? = appContext): String {
         val srv = SERVERS.firstOrNull { it.key.equals(serverKey, true) }
@@ -246,6 +245,14 @@ object WatchOMoviesSettingsDialog {
         prefs(ctx)?.edit()?.putBoolean(KEY_HINDI_ONLY, enabled)?.apply()
     }
 
+    /**
+     * Checks whether an individual category group ("Indian OTT", "Studios 18+", "Tubes") is allowed.
+     */
+    fun isCategoryGroupAllowed(group: String, ctx: Context? = appContext): Boolean {
+        if (isHindiOnly(ctx) && !group.equals("Indian OTT", true)) return false
+        return isGroupEnabled(group, ctx)
+    }
+
     fun isShuffleHome(ctx: Context? = appContext): Boolean =
         prefs(ctx)?.getBoolean(KEY_SHUFFLE_HOME, false) ?: false
 
@@ -254,7 +261,7 @@ object WatchOMoviesSettingsDialog {
     }
 
     fun getRowsPerServer(ctx: Context? = appContext): Int =
-        prefs(ctx)?.getInt(KEY_ROWS_PER_SERVER, 5) ?: 5
+        prefs(ctx)?.getInt(KEY_ROWS_PER_SERVER, 10) ?: 10
 
     fun setRowsPerServer(ctx: Context, count: Int) {
         prefs(ctx)?.edit()?.putInt(KEY_ROWS_PER_SERVER, count.coerceIn(2, 60))?.apply()
@@ -266,9 +273,7 @@ object WatchOMoviesSettingsDialog {
     fun isServerEnabled(key: String, ctx: Context? = appContext): Boolean {
         if (!isServerRawChecked(key, ctx)) return false
         val srv = SERVERS.firstOrNull { it.key.equals(key, true) } ?: return true
-        if (!isGroupEnabled(srv.category, ctx)) return false
-        if (isHindiOnly(ctx) && !srv.isHindi) return false
-        return true
+        return srv.groups.any { isCategoryGroupAllowed(it, ctx) }
     }
 
     fun setServerEnabled(ctx: Context, key: String, enabled: Boolean) {
@@ -312,14 +317,6 @@ object WatchOMoviesSettingsDialog {
 
     fun isQuality480Enabled(ctx: Context? = appContext): Boolean = prefs(ctx)?.getBoolean(KEY_Q_480, true) ?: true
     fun setQuality480Enabled(ctx: Context, v: Boolean) = prefs(ctx)?.edit()?.putBoolean(KEY_Q_480, v)?.apply()
-
-    fun getPreferredQuality(ctx: Context? = appContext): String = when {
-        isQuality4kEnabled(ctx) -> "4K"
-        isQuality1080Enabled(ctx) -> "1080p"
-        isQuality720Enabled(ctx) -> "720p"
-        isQuality480Enabled(ctx) -> "480p"
-        else -> "AUTO"
-    }
 
     fun getConcurrency(ctx: Context? = appContext): Int = prefs(ctx)?.getInt(KEY_CONCURRENCY, 6) ?: 6
     fun setConcurrency(ctx: Context, v: Int) = prefs(ctx)?.edit()?.putInt(KEY_CONCURRENCY, v.coerceIn(2, 15))?.apply()
@@ -368,13 +365,6 @@ object WatchOMoviesSettingsDialog {
         val host = extractHostKey(urlOrDomain)
         val raw = map[host] ?: map.entries.firstOrNull { host.endsWith(it.key) || it.key.endsWith(host) }?.value
         return raw?.takeIf { it.isNotBlank() && it != CF_VERIFIED_MARKER }
-    }
-
-    fun isDomainCfVerified(urlOrDomain: String, ctx: Context? = appContext): Boolean {
-        val map = getSavedCookiesMap(ctx)
-        if (map.isEmpty()) return false
-        val host = extractHostKey(urlOrDomain)
-        return map.containsKey(host) || map.keys.any { host.endsWith(it) || it.endsWith(host) }
     }
 
     fun clearAllCfCookies(ctx: Context) {
@@ -1117,7 +1107,8 @@ object WatchOMoviesSettingsDialog {
             holder.nameTv.text = srv.name
             holder.nameTv.alpha = if (active) 1f else 0.55f
 
-            holder.catTv.text = srv.category
+            val activeGroups = srv.groups.filter { isCategoryGroupAllowed(it, ctx) }
+            holder.catTv.text = if (activeGroups.isEmpty()) "FILTERED" else activeGroups.joinToString(" • ")
             holder.catTv.setTextColor(safeColor("#38BDF8"))
             holder.catTv.background = tintBadgeBg("#38BDF8", dpf(ctx, 6f), 32, 70)
 
@@ -1207,7 +1198,7 @@ object WatchOMoviesSettingsDialog {
             setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
         })
         titleCol.addView(TextView(ctx).apply {
-            text = "9 SERVERS • 350+ CATEGORIES • MULTI-EXTRACTOR"
+            text = "INDIAN OTT • STUDIOS 18+ • TUBES (351 ROWS)"
             textSize = 8.2f; letterSpacing = 0.08f; isSingleLine = true
             setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor("#94A3B8"))
             setPadding(0, dp(ctx, 2), 0, 0)
@@ -1242,7 +1233,7 @@ object WatchOMoviesSettingsDialog {
             return box to valTv
         }
         val (srvChip, srvValTv) = statChip("SERVERS", "#38BDF8", 7)
-        val (extChip, extValTv) = statChip("EXTRACTORS", "#C084FC", 7)
+        val (extChip, extValTv) = statChip("GROUPS ON", "#C084FC", 7)
         val (spdChip, spdValTv) = statChip("HOME ROWS", "#FBBF24", 0)
         statsRow.addView(srvChip); statsRow.addView(extChip); statsRow.addView(spdChip)
         header.addView(statsRow)
@@ -1251,7 +1242,8 @@ object WatchOMoviesSettingsDialog {
         fun refreshStats() {
             val srvOn = SERVERS.count { isServerEnabled(it.key, ctx) }
             srvValTv.text = "$srvOn/${SERVERS.size}"
-            extValTv.text = "${EXTRACTORS.count { isExtractorEnabled(it.key, ctx) }}/${EXTRACTORS.size}"
+            val grpOn = listOf("Indian OTT", "Studios 18+", "Tubes").count { isCategoryGroupAllowed(it, ctx) }
+            extValTv.text = "$grpOn/3"
             spdValTv.text = if (currentRowsPerServer >= 60) "ALL" else "${currentRowsPerServer}/srv"
         }
         refreshStats()
@@ -1304,7 +1296,7 @@ object WatchOMoviesSettingsDialog {
         actionRow.addView(searchBox); actionRow.addView(allOnBtn); actionRow.addView(allOffBtn)
         root.addView(actionRow)
 
-        val categories = listOf("All", "Indian OTT", "Studios 18+", "Tubes", "Hindi")
+        val categories = listOf("All", "Indian OTT", "Studios 18+", "Tubes")
         val chipRow = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(ctx, 8) }
@@ -1382,11 +1374,7 @@ object WatchOMoviesSettingsDialog {
             val orderMap = getServerOrder(ctx).withIndex().associate { it.value to it.index }
             val sorted = SERVERS.sortedBy { orderMap[it.key] ?: Int.MAX_VALUE }
             val filtered = sorted.filter { item ->
-                val catOk = when (selectedCategory) {
-                    "All" -> true
-                    "Hindi" -> item.isHindi
-                    else -> item.category.equals(selectedCategory, ignoreCase = true)
-                }
+                val catOk = selectedCategory == "All" || item.groups.any { it.equals(selectedCategory, ignoreCase = true) }
                 val dom = getServerDomain(item.key, ctx)
                 val qOk = currentQuery.isEmpty() ||
                     item.name.lowercase().contains(currentQuery) ||
@@ -1543,29 +1531,29 @@ object WatchOMoviesSettingsDialog {
             parent.addView(card)
         }
 
-        val catSec = makeSectionLabel(ctx, "🎛️ Category Group Filters", activeTheme.primaryHex)
+        val catSec = makeSectionLabel(ctx, "🎛️ Category Group Filters (Separated)", activeTheme.primaryHex)
         themedSectionBars.add(catSec.getChildAt(0))
         streamPane.addView(catSec)
-        makeToggleCard(streamPane, "Indian OTT / Web Series", "WatchOMovies & TellyHD Indian (Ullu, PrimePlay, Alt, etc.)", isGroupEnabled("Indian OTT", ctx)) {
+        makeToggleCard(streamPane, "🇮🇳 Indian OTT / Web Series (88)", "Sab Hindi & Indian OTT ek jagah (Ullu, Fliz, PrimePlay, TellyHD, etc.)", isGroupEnabled("Indian OTT", ctx)) {
             setGroupEnabled(ctx, "Indian OTT", it); applyServerFilter()
         }
-        makeToggleCard(streamPane, "International Studios (18+)", "BrazzPW, XMoviesForYou, WatchPorn, Taboodaddy, Pvzija", isGroupEnabled("Studios 18+", ctx)) {
+        makeToggleCard(streamPane, "🎬 International Studios 18+ (161)", "Saare Studios ek jagah (Brazzers, Vixen, Blacked, Tushy, XMovies, etc.)", isGroupEnabled("Studios 18+", ctx)) {
             setGroupEnabled(ctx, "Studios 18+", it); applyServerFilter()
         }
-        makeToggleCard(streamPane, "Tubes & Models", "XXXTime & Free Porn Videos categories", isGroupEnabled("Tubes", ctx)) {
+        makeToggleCard(streamPane, "📺 Tubes & Models (102)", "Baaki sab Tube tags, Feeds & Models ek jagah", isGroupEnabled("Tubes", ctx)) {
             setGroupEnabled(ctx, "Tubes", it); applyServerFilter()
         }
-        makeToggleCard(streamPane, "Hindi Providers Only 🇮🇳", "Sirf Hindi / Indian OTT servers dikhayein", isHindiOnly(ctx)) {
+        makeToggleCard(streamPane, "Hindi OTT Only Mode 🇮🇳", "Sirf Indian Hindi OTT categories dikhayein (Studios & Tubes hide)", isHindiOnly(ctx)) {
             setHindiOnly(ctx, it); applyServerFilter()
         }
-        makeToggleCard(streamPane, "Shuffle Home Rows", "Home page categories ko randomize karein", isShuffleHome(ctx)) {
+        makeToggleCard(streamPane, "Shuffle Rows Inside Groups", "Har group ke andar rows randomize karein", isShuffleHome(ctx)) {
             setShuffleHome(ctx, it)
         }
 
         val pSec = makeSectionLabel(ctx, "🚀 Speed & Home Load Control", activeTheme.primaryHex)
         themedSectionBars.add(pSec.getChildAt(0))
         streamPane.addView(pSec)
-        makeStepperCard(streamPane, "Home Rows Per Server", "Har server se top rows (5 = fast, 60 = All 350)", currentRowsPerServer, 2, 2, 60, "") {
+        makeStepperCard(streamPane, "Home Rows Per Server", "Har server se rows (10 = balanced, 60 = All 351)", currentRowsPerServer, 5, 5, 60, "") {
             currentRowsPerServer = it; setRowsPerServer(ctx, it); refreshStats()
         }
         makeStepperCard(streamPane, "Parallel Search Workers", "Concurrent server search threads", currentConcurrency, 1, 2, 15, "x") {
@@ -1844,4 +1832,3 @@ object WatchOMoviesSettingsDialog {
         }
     }
 }
-
