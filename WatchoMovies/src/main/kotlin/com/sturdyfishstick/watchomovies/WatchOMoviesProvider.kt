@@ -13,7 +13,7 @@ import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 
 class WatchOMoviesProvider : MainAPI() {
-    override var mainUrl              = "https://watchomovies.social"
+    override var mainUrl              = WatchOMoviesSettingsDialog.DEFAULT_DOMAIN
     override var name                 = "WatchOMovies"
     override val hasMainPage          = true
     override var lang                 = "hi"
@@ -22,7 +22,7 @@ class WatchOMoviesProvider : MainAPI() {
     override val supportedTypes       = setOf(TvType.Movie, TvType.TvSeries, TvType.NSFW)
     override val vpnStatus            = VPNStatus.MightBeNeeded
 
-    private val userAgent = "Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36"
+    private val userAgent = WatchOMoviesSettingsDialog.CF_BYPASS_UA
 
     private val browserHeaders = mapOf(
         "User-Agent" to userAgent,
@@ -32,6 +32,15 @@ class WatchOMoviesProvider : MainAPI() {
 
     private val cfMutexMap = ConcurrentHashMap<String, Mutex>()
     private val cfKillerMap = ConcurrentHashMap<String, CloudflareKiller>()
+
+    fun applySavedSettings() {
+        mainUrl = WatchOMoviesSettingsDialog.getCustomDomain()
+    }
+
+    fun clearCfCache() {
+        cfKillerMap.values.forEach { runCatching { it.savedCookies.clear() } }
+        cfKillerMap.clear()
+    }
 
     private fun mutexFor(url: String): Mutex =
         cfMutexMap.getOrPut(try { Uri.parse(url).host ?: mainUrl } catch (e: Exception) { mainUrl }) { Mutex() }
@@ -43,83 +52,38 @@ class WatchOMoviesProvider : MainAPI() {
         return response.code in listOf(403, 503)
     }
 
-    override val mainPage = mainPageOf(
-        "" to "Latest Updates",
-        "movies" to "Movies",
-        "genre/brazzers" to "Brazzers",
-        "genre/bangbros" to "Bangbros",
-        "genre/naughty-america" to "Naughty America",
-        "genre/reality-kings" to "Reality Kings",
-        "genre/vixen" to "Vixen",
-        "genre/wicked-pictures" to "Wicked Pictures",
-        "genre/evil-angel" to "Evil Angel",
-        "genre/teamskeet" to "Teamskeet",
-        "genre/digital-playground" to "Digital Playground",
-        "genre/twistys" to "Twistys",
-        "genre/marc-dorcel" to "Marc Dorcel",
-        "genre/jules-jordan-video" to "Jules Jordan Video",
-        "genre/new-sensations" to "New Sensations",
-        "genre/ddf-network" to "DDF Network",
-        "genre/mofos" to "Mofos",
-        "genre/elegant-angel" to "Elegant Angel",
-        "genre/fakehub" to "FakeHub",
-        "genre/faketaxi" to "FakeTaxi",
-        "genre/girlsway" to "GirlsWay",
-        "genre/mylf" to "MYLF",
-        "director/ullu-originals" to "Ullu Originals",
-        "director/fliz-movies" to "Fliz Movies",
-        "director/nuefliks" to "Nuefliks",
-        "director/hotshots" to "Hotshots",
-        "director/hunters" to "Hunters",
-        "director/moodx-originals" to "MoodX",
-        "director/voovi" to "VooVi",
-        "director/primeplay" to "PrimePlay",
-        "director/besharams" to "Besharams",
-        "director/kooku" to "Kooku",
-        "director/gupchup" to "Gupchup",
-        "director/feneomovies" to "Feneomovies",
-        "director/cinemadosti" to "Cinemadosti",
-        "director/primeflix" to "Primeflix",
-        "director/gemplex" to "Gemplex",
-        "director/rabbit" to "Rabbit",
-        "director/hotmasti" to "HotMasti",
-        "director/mastiprime" to "MastiPrime",
-        "director/ek-night-show" to "Ek Night Show",
-        "director/flixskmovies" to "Flixskmovies",
-        "director/lootlo" to "Lootlo",
-        "director/hootzy" to "Hootzy",
-        "director/balloons" to "Balloons",
-        "director/big-movie-zoo" to "Big Movie Zoo",
-        "director/bambooflix" to "Bambooflix",
-        "director/piliflix" to "Piliflix",
-        "director/11upmovies" to "11upmovies",
-        "director/eightshots" to "Eightshots",
-        "director/i-entertainment" to "I-Entertainment",
-        "director/hotprime" to "Hotprime",
-        "director/bananaprime" to "BananaPrime",
-        "director/chikooflix" to "Chikooflix",
-        "director/glamheart" to "Glamheart",
-        "director/worldprime" to "Worldprime"
-    )
+    override val mainPage: List<MainPageData>
+        get() = WatchOMoviesSettingsDialog.getActiveCategories().map { cat ->
+            MainPageData(name = cat.name, data = cat.path)
+        }
 
     private suspend fun getPage(url: String, referer: String? = null): NiceResponse? {
         return try {
-            val response = app.get(url, headers = browserHeaders, referer = referer)
+            val headers = browserHeaders.toMutableMap()
+            WatchOMoviesSettingsDialog.getCookieForDomain(urlOrDomain = url)?.let {
+                headers["Cookie"] = it
+            }
+
+            val response = app.get(url, headers = headers, referer = referer)
             if (!isCloudflarePage(response)) {
                 response
-            } else {
+            } else if (WatchOMoviesSettingsDialog.isCfAutoRetry()) {
                 mutexFor(url).withLock {
                     val cfKiller = killerFor(url)
-                    val retryResponse = app.get(url, headers = browserHeaders, interceptor = cfKiller, referer = referer)
+                    val retryResponse = app.get(url, headers = headers, interceptor = cfKiller, referer = referer)
                     if (isCloudflarePage(retryResponse)) {
                         cfKiller.savedCookies.clear()
-                        app.get(url, headers = browserHeaders, interceptor = cfKiller, referer = referer)
+                        app.get(url, headers = headers, interceptor = cfKiller, referer = referer)
                     } else {
                         retryResponse
                     }
                 }
+            } else {
+                WatchOMoviesSettingsDialog.logDiag("CF", "Blocked (${response.code}): $url")
+                response
             }
         } catch (e: Exception) {
+            WatchOMoviesSettingsDialog.logDiag("ERROR", "$url -> ${e.message}")
             null
         }
     }
@@ -490,3 +454,4 @@ class WatchOMoviesProvider : MainAPI() {
         }
     }
 }
+
