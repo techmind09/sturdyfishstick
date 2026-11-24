@@ -53,6 +53,12 @@ class WatchOMoviesProvider : MainAPI() {
     private val hostFailCounts = ConcurrentHashMap<String, AtomicInteger>()
     private val hostDeadUntil = ConcurrentHashMap<String, Long>()
 
+    data class CatEntry(
+        val path: String,
+        val label: String,
+        val group: String // "Indian OTT", "Studios 18+", "Tubes"
+    )
+
     fun applySavedSettings() {
         mainUrl = WatchOMoviesSettingsDialog.getServerDomain("watchomovies")
     }
@@ -76,9 +82,6 @@ class WatchOMoviesProvider : MainAPI() {
     private fun srvBase(serverKey: String): String =
         WatchOMoviesSettingsDialog.getServerDomain(serverKey)
 
-    /**
-     * Valid https:// URL route so CloudStream's fixUrl() NEVER prepends mainUrl!
-     */
     private fun encodeRoute(serverKey: String, payload: String): String {
         val enc = URLEncoder.encode(payload, "UTF-8")
         return "https://wom.internal/$serverKey?u=$enc"
@@ -165,423 +168,471 @@ class WatchOMoviesProvider : MainAPI() {
     }
 
     // =========================================================================
-    // Dynamic MainPage Categories Across All 9 Enabled Servers
+    // Classified Categories Across All 9 Servers
+    // Groups: "Indian OTT", "Studios 18+", "Tubes"
     // =========================================================================
-    private val serverCategoryMap: Map<String, List<Pair<String, String>>> by lazy {
+    private val serverCategoryMap: Map<String, List<CatEntry>> by lazy {
         val currentYear = Calendar.getInstance().get(Calendar.YEAR)
         mapOf(
-            // 1. WatchOMovies (55 Categories)
+            // 1. WatchOMovies (34 Indian OTT + 20 International Studios + 2 General Tubes)
             "watchomovies" to listOf(
-                "" to "Latest Updates",
-                "movies" to "Movies",
-                "director/ullu-originals" to "Ullu Originals",
-                "director/fliz-movies" to "Fliz Movies",
-                "director/nuefliks" to "Nuefliks",
-                "director/hotshots" to "Hotshots",
-                "director/hunters" to "Hunters",
-                "director/moodx-originals" to "MoodX",
-                "director/voovi" to "VooVi",
-                "director/primeplay" to "PrimePlay",
-                "director/besharams" to "Besharams",
-                "director/kooku" to "Kooku",
-                "director/gupchup" to "Gupchup",
-                "director/feneomovies" to "Feneomovies",
-                "director/cinemadosti" to "Cinemadosti",
-                "director/primeflix" to "Primeflix",
-                "director/gemplex" to "Gemplex",
-                "director/rabbit" to "Rabbit",
-                "director/hotmasti" to "HotMasti",
-                "director/mastiprime" to "MastiPrime",
-                "director/ek-night-show" to "Ek Night Show",
-                "director/flixskmovies" to "Flixskmovies",
-                "director/lootlo" to "Lootlo",
-                "director/hootzy" to "Hootzy",
-                "director/balloons" to "Balloons",
-                "director/big-movie-zoo" to "Big Movie Zoo",
-                "director/bambooflix" to "Bambooflix",
-                "director/piliflix" to "Piliflix",
-                "director/11upmovies" to "11upmovies",
-                "director/eightshots" to "Eightshots",
-                "director/i-entertainment" to "I-Entertainment",
-                "director/hotprime" to "Hotprime",
-                "director/bananaprime" to "BananaPrime",
-                "director/chikooflix" to "Chikooflix",
-                "director/glamheart" to "Glamheart",
-                "director/worldprime" to "Worldprime",
-                "genre/brazzers" to "Brazzers",
-                "genre/bangbros" to "Bangbros",
-                "genre/naughty-america" to "Naughty America",
-                "genre/reality-kings" to "Reality Kings",
-                "genre/vixen" to "Vixen",
-                "genre/wicked-pictures" to "Wicked Pictures",
-                "genre/evil-angel" to "Evil Angel",
-                "genre/teamskeet" to "Teamskeet",
-                "genre/digital-playground" to "Digital Playground",
-                "genre/twistys" to "Twistys",
-                "genre/marc-dorcel" to "Marc Dorcel",
-                "genre/jules-jordan-video" to "Jules Jordan Video",
-                "genre/new-sensations" to "New Sensations",
-                "genre/ddf-network" to "DDF Network",
-                "genre/mofos" to "Mofos",
-                "genre/elegant-angel" to "Elegant Angel",
-                "genre/fakehub" to "FakeHub",
-                "genre/faketaxi" to "FakeTaxi",
-                "genre/girlsway" to "GirlsWay",
-                "genre/mylf" to "MYLF"
+                // Indian OTT (Hindi)
+                CatEntry("director/ullu-originals", "Ullu Originals", "Indian OTT"),
+                CatEntry("director/fliz-movies", "Fliz Movies", "Indian OTT"),
+                CatEntry("director/nuefliks", "Nuefliks", "Indian OTT"),
+                CatEntry("director/hotshots", "Hotshots", "Indian OTT"),
+                CatEntry("director/hunters", "Hunters", "Indian OTT"),
+                CatEntry("director/moodx-originals", "MoodX", "Indian OTT"),
+                CatEntry("director/voovi", "VooVi", "Indian OTT"),
+                CatEntry("director/primeplay", "PrimePlay", "Indian OTT"),
+                CatEntry("director/besharams", "Besharams", "Indian OTT"),
+                CatEntry("director/kooku", "Kooku", "Indian OTT"),
+                CatEntry("director/gupchup", "Gupchup", "Indian OTT"),
+                CatEntry("director/feneomovies", "Feneomovies", "Indian OTT"),
+                CatEntry("director/cinemadosti", "Cinemadosti", "Indian OTT"),
+                CatEntry("director/primeflix", "Primeflix", "Indian OTT"),
+                CatEntry("director/gemplex", "Gemplex", "Indian OTT"),
+                CatEntry("director/rabbit", "Rabbit", "Indian OTT"),
+                CatEntry("director/hotmasti", "HotMasti", "Indian OTT"),
+                CatEntry("director/mastiprime", "MastiPrime", "Indian OTT"),
+                CatEntry("director/ek-night-show", "Ek Night Show", "Indian OTT"),
+                CatEntry("director/flixskmovies", "Flixskmovies", "Indian OTT"),
+                CatEntry("director/lootlo", "Lootlo", "Indian OTT"),
+                CatEntry("director/hootzy", "Hootzy", "Indian OTT"),
+                CatEntry("director/balloons", "Balloons", "Indian OTT"),
+                CatEntry("director/big-movie-zoo", "Big Movie Zoo", "Indian OTT"),
+                CatEntry("director/bambooflix", "Bambooflix", "Indian OTT"),
+                CatEntry("director/piliflix", "Piliflix", "Indian OTT"),
+                CatEntry("director/11upmovies", "11upmovies", "Indian OTT"),
+                CatEntry("director/eightshots", "Eightshots", "Indian OTT"),
+                CatEntry("director/i-entertainment", "I-Entertainment", "Indian OTT"),
+                CatEntry("director/hotprime", "Hotprime", "Indian OTT"),
+                CatEntry("director/bananaprime", "BananaPrime", "Indian OTT"),
+                CatEntry("director/chikooflix", "Chikooflix", "Indian OTT"),
+                CatEntry("director/glamheart", "Glamheart", "Indian OTT"),
+                CatEntry("director/worldprime", "Worldprime", "Indian OTT"),
+
+                // International Studios (18+)
+                CatEntry("genre/brazzers", "Brazzers", "Studios 18+"),
+                CatEntry("genre/bangbros", "Bangbros", "Studios 18+"),
+                CatEntry("genre/naughty-america", "Naughty America", "Studios 18+"),
+                CatEntry("genre/reality-kings", "Reality Kings", "Studios 18+"),
+                CatEntry("genre/vixen", "Vixen", "Studios 18+"),
+                CatEntry("genre/wicked-pictures", "Wicked Pictures", "Studios 18+"),
+                CatEntry("genre/evil-angel", "Evil Angel", "Studios 18+"),
+                CatEntry("genre/teamskeet", "Teamskeet", "Studios 18+"),
+                CatEntry("genre/digital-playground", "Digital Playground", "Studios 18+"),
+                CatEntry("genre/twistys", "Twistys", "Studios 18+"),
+                CatEntry("genre/marc-dorcel", "Marc Dorcel", "Studios 18+"),
+                CatEntry("genre/jules-jordan-video", "Jules Jordan Video", "Studios 18+"),
+                CatEntry("genre/new-sensations", "New Sensations", "Studios 18+"),
+                CatEntry("genre/ddf-network", "DDF Network", "Studios 18+"),
+                CatEntry("genre/mofos", "Mofos", "Studios 18+"),
+                CatEntry("genre/elegant-angel", "Elegant Angel", "Studios 18+"),
+                CatEntry("genre/fakehub", "FakeHub", "Studios 18+"),
+                CatEntry("genre/faketaxi", "FakeTaxi", "Studios 18+"),
+                CatEntry("genre/girlsway", "GirlsWay", "Studios 18+"),
+                CatEntry("genre/mylf", "MYLF", "Studios 18+"),
+
+                // Tubes / General Feeds
+                CatEntry("", "Latest Updates", "Tubes"),
+                CatEntry("movies", "Movies", "Tubes")
             ),
 
-            // 2. TellyHD Indian (53 Categories)
+            // 2. TellyHD Indian (All 53 -> Indian OTT)
             "tellyhd" to listOf(
-                "release/$currentYear" to "Latest ($currentYear)",
-                "genre/18plus" to "18+",
-                "genre/altbalaji" to "Alt Balaji",
-                "genre/atrangii" to "Atrangii",
-                "genre/primeplay" to "PrimePlay",
-                "genre/moodx" to "MoodX",
-                "genre/neonx" to "NeonX",
-                "genre/hunters" to "Hunters",
-                "genre/rabbit" to "Rabbit",
-                "genre/hotshot" to "HotShot",
-                "genre/gupchup" to "GupChup",
-                "genre/hindi" to "Hindi",
-                "genre/hindi-dubbed" to "Hindi Dubbed",
-                "genre/indian" to "INDIAN",
-                "genre/niksindian" to "Niksindian",
-                "genre/rasminair" to "RasmiNair",
-                "genre/9redmovie" to "9redmovie",
-                "genre/addatv" to "Addatv",
-                "genre/aahaflix" to "AahaFlix",
-                "genre/bindastimes" to "Bindastimes",
-                "genre/bongonaari" to "BongoNaari",
-                "genre/boomex" to "BoomEX",
-                "genre/bulbulplay" to "Bulbulplay",
-                "genre/bullap" to "bullap",
-                "genre/cineon" to "CineOn",
-                "genre/crf-studioz" to "CRF Studioz",
-                "genre/cineprime" to "CinePrime",
-                "genre/digimovieplex" to "Digimovieplex",
-                "genre/dugru" to "Dugru",
-                "genre/dyzreplay" to "DyzrePlay",
-                "genre/eortv" to "Eortv",
-                "genre/feelapp" to "Feelapp",
-                "genre/feneo" to "Feneo",
-                "genre/feniapo" to "Feniapp",
-                "genre/foxxprime" to "foxxprime",
-                "genre/fugi" to "Fugi",
-                "genre/fukrey" to "Fukrey",
-                "genre/fun2sh" to "fun2sh",
-                "genre/funtyy" to "funtyy",
-                "genre/goddesmahi" to "GoddesMahi",
-                "genre/goodflixmovies" to "goodflixmovies",
-                "genre/habbitmovies" to "HabbitMovies",
-                "genre/hitprime" to "Hitprime",
-                "genre/hotfm" to "HotFM",
-                "genre/hotx" to "Hotx",
-                "genre/hulchul" to "HulChul",
-                "genre/ibamovies" to "IBAMovies",
-                "genre/jalva" to "Jalva",
-                "genre/jugnu" to "Jugnu",
-                "genre/jugnutv" to "JugnuTV",
-                "genre/lookentertainment" to "Lookentertainment",
-                "genre/makhan" to "Makhan",
-                "genre/meetx" to "Meetx"
+                CatEntry("release/$currentYear", "Latest ($currentYear)", "Indian OTT"),
+                CatEntry("genre/18plus", "18+", "Indian OTT"),
+                CatEntry("genre/altbalaji", "Alt Balaji", "Indian OTT"),
+                CatEntry("genre/atrangii", "Atrangii", "Indian OTT"),
+                CatEntry("genre/primeplay", "PrimePlay", "Indian OTT"),
+                CatEntry("genre/moodx", "MoodX", "Indian OTT"),
+                CatEntry("genre/neonx", "NeonX", "Indian OTT"),
+                CatEntry("genre/hunters", "Hunters", "Indian OTT"),
+                CatEntry("genre/rabbit", "Rabbit", "Indian OTT"),
+                CatEntry("genre/hotshot", "HotShot", "Indian OTT"),
+                CatEntry("genre/gupchup", "GupChup", "Indian OTT"),
+                CatEntry("genre/hindi", "Hindi", "Indian OTT"),
+                CatEntry("genre/hindi-dubbed", "Hindi Dubbed", "Indian OTT"),
+                CatEntry("genre/indian", "INDIAN", "Indian OTT"),
+                CatEntry("genre/niksindian", "Niksindian", "Indian OTT"),
+                CatEntry("genre/rasminair", "RasmiNair", "Indian OTT"),
+                CatEntry("genre/9redmovie", "9redmovie", "Indian OTT"),
+                CatEntry("genre/addatv", "Addatv", "Indian OTT"),
+                CatEntry("genre/aahaflix", "AahaFlix", "Indian OTT"),
+                CatEntry("genre/bindastimes", "Bindastimes", "Indian OTT"),
+                CatEntry("genre/bongonaari", "BongoNaari", "Indian OTT"),
+                CatEntry("genre/boomex", "BoomEX", "Indian OTT"),
+                CatEntry("genre/bulbulplay", "Bulbulplay", "Indian OTT"),
+                CatEntry("genre/bullap", "bullap", "Indian OTT"),
+                CatEntry("genre/cineon", "CineOn", "Indian OTT"),
+                CatEntry("genre/crf-studioz", "CRF Studioz", "Indian OTT"),
+                CatEntry("genre/cineprime", "CinePrime", "Indian OTT"),
+                CatEntry("genre/digimovieplex", "Digimovieplex", "Indian OTT"),
+                CatEntry("genre/dugru", "Dugru", "Indian OTT"),
+                CatEntry("genre/dyzreplay", "DyzrePlay", "Indian OTT"),
+                CatEntry("genre/eortv", "Eortv", "Indian OTT"),
+                CatEntry("genre/feelapp", "Feelapp", "Indian OTT"),
+                CatEntry("genre/feneo", "Feneo", "Indian OTT"),
+                CatEntry("genre/feniapo", "Feniapp", "Indian OTT"),
+                CatEntry("genre/foxxprime", "foxxprime", "Indian OTT"),
+                CatEntry("genre/fugi", "Fugi", "Indian OTT"),
+                CatEntry("genre/fukrey", "Fukrey", "Indian OTT"),
+                CatEntry("genre/fun2sh", "fun2sh", "Indian OTT"),
+                CatEntry("genre/funtyy", "funtyy", "Indian OTT"),
+                CatEntry("genre/goddesmahi", "GoddesMahi", "Indian OTT"),
+                CatEntry("genre/goodflixmovies", "goodflixmovies", "Indian OTT"),
+                CatEntry("genre/habbitmovies", "HabbitMovies", "Indian OTT"),
+                CatEntry("genre/hitprime", "Hitprime", "Indian OTT"),
+                CatEntry("genre/hotfm", "HotFM", "Indian OTT"),
+                CatEntry("genre/hotx", "Hotx", "Indian OTT"),
+                CatEntry("genre/hulchul", "HulChul", "Indian OTT"),
+                CatEntry("genre/ibamovies", "IBAMovies", "Indian OTT"),
+                CatEntry("genre/jalva", "Jalva", "Indian OTT"),
+                CatEntry("genre/jugnu", "Jugnu", "Indian OTT"),
+                CatEntry("genre/jugnutv", "JugnuTV", "Indian OTT"),
+                CatEntry("genre/lookentertainment", "Lookentertainment", "Indian OTT"),
+                CatEntry("genre/makhan", "Makhan", "Indian OTT"),
+                CatEntry("genre/meetx", "Meetx", "Indian OTT")
             ),
 
-            // 3. BrazzPW (35 Categories)
+            // 3. BrazzPW (20 Studio Sites -> Studios 18+, 15 Feeds/Tags -> Tubes)
             "brazzpw" to listOf(
-                "/videos/newest/" to "Newest Videos",
-                "/videos/sortby/beingwatched/" to "Being Watched",
-                "/videos/sortby/rating/" to "Top Rated",
-                "/videos/sortby/views/" to "Most Viewed",
-                "/videos/tags/112/black/" to "Black",
-                "/videos/tags/448/anal/" to "Anal",
-                "/videos/tags/79/milf/" to "Milf",
-                "/videos/tags/49/big-ass/" to "Big Ass",
-                "/videos/tags/220/squirt/" to "Squirt",
-                "/videos/tags/92/bbw/" to "BBW",
-                "/videos/tags/181/stepmom/" to "Stepmom",
-                "/videos/tags/211/massage/" to "Massage",
-                "/videos/tags/511/parody/" to "Parody",
-                "/videos/tags/192/yoga/" to "Yoga",
-                "/videos/tags/473/double-penetration/" to "Double Penetration",
-                "/videos/site/65/big-wet-butts/" to "Big Wet Butts",
-                "/videos/site/66/baby-got-boobs/" to "Baby Got Boobs",
-                "/videos/site/62/doctor-adventures/" to "Doctor Adventures",
-                "/videos/site/67/mommy-got-boobs/" to "Mommy Got Boobs",
-                "/videos/site/71/big-tits-at-work/" to "Big Tits At Work",
-                "/videos/site/75/big-tits-at-school/" to "Big Tits At School",
-                "/videos/site/99/mom-in-control/" to "Mom in control",
-                "/videos/site/98/cfnm/" to "Cfnm",
-                "/videos/site/96/brazzers-exxtra/" to "Brazzers Exxtra",
-                "/videos/site/94/dirty-masseur/" to "Dirty masseur",
-                "/videos/site/92/zz-series/" to "Zz Series",
-                "/videos/site/90/hot-and-mean/" to "Hot and mean",
-                "/videos/site/89/big-tits-in-uniform/" to "Big tits in uniform",
-                "/videos/site/87/day-with-pornstar/" to "Day with pornstar",
-                "/videos/site/83/big-tits-in-sports/" to "Big tits in sports",
-                "/videos/site/82/big-butts-like-it-big/" to "Big butts like it big",
-                "/videos/site/81/real-wife-stories/" to "Real wife Stories",
-                "/videos/site/80/teen-like-it-big/" to "Teen like it big",
-                "/videos/site/78/milfs-like-it-big/" to "Milfs like it big",
-                "/videos/site/77/pornstar-like-it-big/" to "Pornstar like it big"
+                // Studios 18+
+                CatEntry("/videos/site/65/big-wet-butts/", "Big Wet Butts", "Studios 18+"),
+                CatEntry("/videos/site/66/baby-got-boobs/", "Baby Got Boobs", "Studios 18+"),
+                CatEntry("/videos/site/62/doctor-adventures/", "Doctor Adventures", "Studios 18+"),
+                CatEntry("/videos/site/67/mommy-got-boobs/", "Mommy Got Boobs", "Studios 18+"),
+                CatEntry("/videos/site/71/big-tits-at-work/", "Big Tits At Work", "Studios 18+"),
+                CatEntry("/videos/site/75/big-tits-at-school/", "Big Tits At School", "Studios 18+"),
+                CatEntry("/videos/site/99/mom-in-control/", "Mom in control", "Studios 18+"),
+                CatEntry("/videos/site/98/cfnm/", "Cfnm", "Studios 18+"),
+                CatEntry("/videos/site/96/brazzers-exxtra/", "Brazzers Exxtra", "Studios 18+"),
+                CatEntry("/videos/site/94/dirty-masseur/", "Dirty masseur", "Studios 18+"),
+                CatEntry("/videos/site/92/zz-series/", "Zz Series", "Studios 18+"),
+                CatEntry("/videos/site/90/hot-and-mean/", "Hot and mean", "Studios 18+"),
+                CatEntry("/videos/site/89/big-tits-in-uniform/", "Big tits in uniform", "Studios 18+"),
+                CatEntry("/videos/site/87/day-with-pornstar/", "Day with pornstar", "Studios 18+"),
+                CatEntry("/videos/site/83/big-tits-in-sports/", "Big tits in sports", "Studios 18+"),
+                CatEntry("/videos/site/82/big-butts-like-it-big/", "Big butts like it big", "Studios 18+"),
+                CatEntry("/videos/site/81/real-wife-stories/", "Real wife Stories", "Studios 18+"),
+                CatEntry("/videos/site/80/teen-like-it-big/", "Teen like it big", "Studios 18+"),
+                CatEntry("/videos/site/78/milfs-like-it-big/", "Milfs like it big", "Studios 18+"),
+                CatEntry("/videos/site/77/pornstar-like-it-big/", "Pornstar like it big", "Studios 18+"),
+
+                // Tubes
+                CatEntry("/videos/newest/", "Newest Videos", "Tubes"),
+                CatEntry("/videos/sortby/beingwatched/", "Being Watched", "Tubes"),
+                CatEntry("/videos/sortby/rating/", "Top Rated", "Tubes"),
+                CatEntry("/videos/sortby/views/", "Most Viewed", "Tubes"),
+                CatEntry("/videos/tags/112/black/", "Black", "Tubes"),
+                CatEntry("/videos/tags/448/anal/", "Anal", "Tubes"),
+                CatEntry("/videos/tags/79/milf/", "Milf", "Tubes"),
+                CatEntry("/videos/tags/49/big-ass/", "Big Ass", "Tubes"),
+                CatEntry("/videos/tags/220/squirt/", "Squirt", "Tubes"),
+                CatEntry("/videos/tags/92/bbw/", "BBW", "Tubes"),
+                CatEntry("/videos/tags/181/stepmom/", "Stepmom", "Tubes"),
+                CatEntry("/videos/tags/211/massage/", "Massage", "Tubes"),
+                CatEntry("/videos/tags/511/parody/", "Parody", "Tubes"),
+                CatEntry("/videos/tags/192/yoga/", "Yoga", "Tubes"),
+                CatEntry("/videos/tags/473/double-penetration/", "Double Penetration", "Tubes")
             ),
 
-            // 4. XMoviesForYou (53 Studios)
+            // 4. XMoviesForYou (All 53 -> Studios 18+)
             "xmoviesforyou" to listOf(
-                "/studio/assparade" to "Studio: AssParade",
-                "/studio/bangbus" to "Studio: BangBus",
-                "/studio/bjraw" to "Studio: BJRaw",
-                "/studio/blacked" to "Studio: Blacked",
-                "/studio/blackedraw" to "Studio: BlackedRaw",
-                "/studio/blacksonblondes" to "Studio: BlacksOnBlondes",
-                "/studio/brazzersexxtra" to "Studio: BrazzersExxtra",
-                "/studio/cherrypimps" to "Studio: CherryPimps",
-                "/studio/dadcrush" to "Studio: DadCrush",
-                "/studio/deeplush" to "Studio: DeepLush",
-                "/studio/deeper" to "Studio: Deeper",
-                "/studio/devilsfilm" to "Studio: DevilsFilm",
-                "/studio/dickdrainers" to "Studio: DickDrainers",
-                "/studio/dirtyauditions" to "Studio: DirtyAuditions",
-                "/studio/dorcelclub" to "Studio: DorcelClub",
-                "/studio/elegantangel" to "Studio: ElegantAngel",
-                "/studio/evilangel" to "Studio: EvilAngel",
-                "/studio/familystrokes" to "Studio: FamilyStrokes",
-                "/studio/gangbangcreampie" to "Studio: GangbangCreampie",
-                "/studio/girlsway" to "Studio: GirlsWay",
-                "/studio/hotwifexxx" to "Studio: HotwifeXXX",
-                "/studio/hussiepass" to "Studio: HussiePass",
-                "/studio/hustler" to "Studio: Hustler",
-                "/studio/japanhdv" to "Studio: JapanHDV",
-                "/studio/jayspov" to "Studio: JaysPOV",
-                "/studio/julesjordan" to "Studio: JulesJordan",
-                "/studio/loveherfeet" to "Studio: LoveHerFeet",
-                "/studio/mylifeinmiami" to "Studio: MyLifeInMiami",
-                "/studio/mypervyfamily" to "Studio: MyPervyFamily",
-                "/studio/mysistershotfriend" to "Studio: MySistersHotFriend",
-                "/studio/newsensations" to "Studio: NewSensations",
-                "/studio/penthousegold" to "Studio: PenthouseGold",
-                "/studio/pervmom" to "Studio: PervMom",
-                "/studio/porndudecasting" to "Studio: PornDudeCasting",
-                "/studio/pornworld" to "Studio: PornWorld",
-                "/studio/private" to "Studio: Private",
-                "/studio/puretaboo" to "Studio: PureTaboo",
-                "/studio/roccosiffredi" to "Studio: RoccoSiffredi",
-                "/studio/seehimfuck" to "Studio: SeeHimFuck",
-                "/studio/sexmex" to "Studio: SexMex",
-                "/studio/shoplyfter" to "Studio: Shoplyfter",
-                "/studio/sislovesme" to "Studio: SisLovesMe",
-                "/studio/spankmonster" to "Studio: SpankMonster",
-                "/studio/sweetsinner" to "Studio: SweetSinner",
-                "/studio/tabooheat" to "Studio: TabooHeat",
-                "/studio/teamskeetselects" to "Studio: TeamSkeetSelects",
-                "/studio/teenfidelity" to "Studio: TeenFidelity",
-                "/studio/throated" to "Studio: Throated",
-                "/studio/touchmywife" to "Studio: TouchMyWife",
-                "/studio/tushy" to "Studio: Tushy",
-                "/studio/tushyraw" to "Studio: TushyRaw",
-                "/studio/vixen" to "Studio: Vixen",
-                "/studio/wicked" to "Studio: Wicked"
+                CatEntry("/studio/assparade", "Studio: AssParade", "Studios 18+"),
+                CatEntry("/studio/bangbus", "Studio: BangBus", "Studios 18+"),
+                CatEntry("/studio/bjraw", "Studio: BJRaw", "Studios 18+"),
+                CatEntry("/studio/blacked", "Studio: Blacked", "Studios 18+"),
+                CatEntry("/studio/blackedraw", "Studio: BlackedRaw", "Studios 18+"),
+                CatEntry("/studio/blacksonblondes", "Studio: BlacksOnBlondes", "Studios 18+"),
+                CatEntry("/studio/brazzersexxtra", "Studio: BrazzersExxtra", "Studios 18+"),
+                CatEntry("/studio/cherrypimps", "Studio: CherryPimps", "Studios 18+"),
+                CatEntry("/studio/dadcrush", "Studio: DadCrush", "Studios 18+"),
+                CatEntry("/studio/deeplush", "Studio: DeepLush", "Studios 18+"),
+                CatEntry("/studio/deeper", "Studio: Deeper", "Studios 18+"),
+                CatEntry("/studio/devilsfilm", "Studio: DevilsFilm", "Studios 18+"),
+                CatEntry("/studio/dickdrainers", "Studio: DickDrainers", "Studios 18+"),
+                CatEntry("/studio/dirtyauditions", "Studio: DirtyAuditions", "Studios 18+"),
+                CatEntry("/studio/dorcelclub", "Studio: DorcelClub", "Studios 18+"),
+                CatEntry("/studio/elegantangel", "Studio: ElegantAngel", "Studios 18+"),
+                CatEntry("/studio/evilangel", "Studio: EvilAngel", "Studios 18+"),
+                CatEntry("/studio/familystrokes", "Studio: FamilyStrokes", "Studios 18+"),
+                CatEntry("/studio/gangbangcreampie", "Studio: GangbangCreampie", "Studios 18+"),
+                CatEntry("/studio/girlsway", "Studio: GirlsWay", "Studios 18+"),
+                CatEntry("/studio/hotwifexxx", "Studio: HotwifeXXX", "Studios 18+"),
+                CatEntry("/studio/hussiepass", "Studio: HussiePass", "Studios 18+"),
+                CatEntry("/studio/hustler", "Studio: Hustler", "Studios 18+"),
+                CatEntry("/studio/japanhdv", "Studio: JapanHDV", "Studios 18+"),
+                CatEntry("/studio/jayspov", "Studio: JaysPOV", "Studios 18+"),
+                CatEntry("/studio/julesjordan", "Studio: JulesJordan", "Studios 18+"),
+                CatEntry("/studio/loveherfeet", "Studio: LoveHerFeet", "Studios 18+"),
+                CatEntry("/studio/mylifeinmiami", "Studio: MyLifeInMiami", "Studios 18+"),
+                CatEntry("/studio/mypervyfamily", "Studio: MyPervyFamily", "Studios 18+"),
+                CatEntry("/studio/mysistershotfriend", "Studio: MySistersHotFriend", "Studios 18+"),
+                CatEntry("/studio/newsensations", "Studio: NewSensations", "Studios 18+"),
+                CatEntry("/studio/penthousegold", "Studio: PenthouseGold", "Studios 18+"),
+                CatEntry("/studio/pervmom", "Studio: PervMom", "Studios 18+"),
+                CatEntry("/studio/porndudecasting", "Studio: PornDudeCasting", "Studios 18+"),
+                CatEntry("/studio/pornworld", "Studio: PornWorld", "Studios 18+"),
+                CatEntry("/studio/private", "Studio: Private", "Studios 18+"),
+                CatEntry("/studio/puretaboo", "Studio: PureTaboo", "Studios 18+"),
+                CatEntry("/studio/roccosiffredi", "Studio: RoccoSiffredi", "Studios 18+"),
+                CatEntry("/studio/seehimfuck", "Studio: SeeHimFuck", "Studios 18+"),
+                CatEntry("/studio/sexmex", "Studio: SexMex", "Studios 18+"),
+                CatEntry("/studio/shoplyfter", "Studio: Shoplyfter", "Studios 18+"),
+                CatEntry("/studio/sislovesme", "Studio: SisLovesMe", "Studios 18+"),
+                CatEntry("/studio/spankmonster", "Studio: SpankMonster", "Studios 18+"),
+                CatEntry("/studio/sweetsinner", "Studio: SweetSinner", "Studios 18+"),
+                CatEntry("/studio/tabooheat", "Studio: TabooHeat", "Studios 18+"),
+                CatEntry("/studio/teamskeetselects", "Studio: TeamSkeetSelects", "Studios 18+"),
+                CatEntry("/studio/teenfidelity", "Studio: TeenFidelity", "Studios 18+"),
+                CatEntry("/studio/throated", "Studio: Throated", "Studios 18+"),
+                CatEntry("/studio/touchmywife", "Studio: TouchMyWife", "Studios 18+"),
+                CatEntry("/studio/tushy", "Studio: Tushy", "Studios 18+"),
+                CatEntry("/studio/tushyraw", "Studio: TushyRaw", "Studios 18+"),
+                CatEntry("/studio/vixen", "Studio: Vixen", "Studios 18+"),
+                CatEntry("/studio/wicked", "Studio: Wicked", "Studios 18+")
             ),
 
-            // 5. XXXTime (48 Categories & Models)
+            // 5. XXXTime (5 Studio Channels -> Studios 18+, 43 Categories/Models -> Tubes)
             "xxxtime" to listOf(
-                "/channels.php?ch=Teamskeet" to "Teamskeet",
-                "/channels.php?ch=Cum4k" to "Cum4k",
-                "/channels.php?ch=Brazzers" to "Brazzers",
-                "/channels.php?ch=Mature4k" to "Mature4k",
-                "/channels.php?ch=Mom4k" to "Mom4k",
-                "/categories.php?c=Big+Ass" to "Big Ass",
-                "/categories.php?c=Redhead" to "Redhead",
-                "/model.php?p=Abigail-Morris" to "Abigail Morris",
-                "/model.php?p=Alanna-pow" to "Alanna Pow",
-                "/model.php?p=Aleksa-Mink" to "Aleksa Mink",
-                "/model.php?p=Alexa-Chains" to "Alexa Chains",
-                "/model.php?p=Ana-Khalifa" to "Ana Khalifa",
-                "/model.php?p=Angel-Youngs" to "Angel Youngs",
-                "/model.php?p=Angela-White" to "Angela White",
-                "/model.php?p=aspen-reign" to "Aspen Reign",
-                "/model.php?p=Comatozze" to "Comatozze",
-                "/model.php?p=Carolina-Guerrero" to "Carolina Guerrero",
-                "/model.php?p=Coco-Lovelock" to "Coco Lovelock",
-                "/model.php?p=Dee-Williams" to "Dee Williams",
-                "/model.php?p=ellie-nova" to "Ellie Nova",
-                "/model.php?p=Elly-Clutch" to "Elly Clutch",
-                "/model.php?p=Eve-Sweet" to "Eve Sweet",
-                "/model.php?p=Hailey-Rose" to "Hailey Rose",
-                "/model.php?p=Isa-Bella" to "Isa Bella",
-                "/model.php?p=jasmine-sherni" to "Jasmine Sherni",
-                "/model.php?p=Juniper-Ren" to "Juniper Ren",
-                "/model.php?p=Koda-Monroe" to "Koda Monroe",
-                "/model.php?p=Kali-Roses" to "Kali Roses",
-                "/model.php?p=Kayley-Gunner" to "Kayley Gunner",
-                "/model.php?p=Lauren-Phillips" to "Lauren Phillips",
-                "/model.php?p=Lena-The-Plug" to "Lena The Plug",
-                "/model.php?p=LuSirena69" to "LuSirena69",
-                "/model.php?p=Lucy-Mochi" to "Lucy Mochi",
-                "/model.php?p=Lula-Stocch" to "Lula Stocch",
-                "/model.php?p=Luna-Doll" to "Luna Doll",
-                "/model.php?p=Melissa-Stratton" to "Melissa Stratton",
-                "/model.php?p=Mia-Khalifa" to "Mia Khalifa",
-                "/model.php?p=Nia-Bleu" to "Nia Bleu",
-                "/model.php?p=Octokuro" to "Octokuro",
-                "/model.php?p=Payton-Preslee" to "Payton Preslee",
-                "/model.php?p=Raissa-Bellini" to "Raissa Bellini",
-                "/model.php?p=Rossa-Vaxx" to "Rossa Vaxx",
-                "/model.php?p=Roxie-Sinner" to "Roxie Sinner",
-                "/model.php?p=Savannah-Bond" to "Savannah Bond",
-                "/model.php?p=Vivienne-Vo" to "Vivienne Vo",
-                "/model.php?p=Willow-Ryder" to "Willow Ryder",
-                "/model.php?p=Yasmina-Khan" to "Yasmina Khan",
-                "/model.php?p=Zoey-Uso" to "Zoey Uso"
+                // Studios 18+
+                CatEntry("/channels.php?ch=Teamskeet", "Teamskeet", "Studios 18+"),
+                CatEntry("/channels.php?ch=Cum4k", "Cum4k", "Studios 18+"),
+                CatEntry("/channels.php?ch=Brazzers", "Brazzers", "Studios 18+"),
+                CatEntry("/channels.php?ch=Mature4k", "Mature4k", "Studios 18+"),
+                CatEntry("/channels.php?ch=Mom4k", "Mom4k", "Studios 18+"),
+
+                // Tubes & Models
+                CatEntry("/categories.php?c=Big+Ass", "Big Ass", "Tubes"),
+                CatEntry("/categories.php?c=Redhead", "Redhead", "Tubes"),
+                CatEntry("/model.php?p=Abigail-Morris", "Abigail Morris", "Tubes"),
+                CatEntry("/model.php?p=Alanna-pow", "Alanna Pow", "Tubes"),
+                CatEntry("/model.php?p=Aleksa-Mink", "Aleksa Mink", "Tubes"),
+                CatEntry("/model.php?p=Alexa-Chains", "Alexa Chains", "Tubes"),
+                CatEntry("/model.php?p=Ana-Khalifa", "Ana Khalifa", "Tubes"),
+                CatEntry("/model.php?p=Angel-Youngs", "Angel Youngs", "Tubes"),
+                CatEntry("/model.php?p=Angela-White", "Angela White", "Tubes"),
+                CatEntry("/model.php?p=aspen-reign", "Aspen Reign", "Tubes"),
+                CatEntry("/model.php?p=Comatozze", "Comatozze", "Tubes"),
+                CatEntry("/model.php?p=Carolina-Guerrero", "Carolina Guerrero", "Tubes"),
+                CatEntry("/model.php?p=Coco-Lovelock", "Coco Lovelock", "Tubes"),
+                CatEntry("/model.php?p=Dee-Williams", "Dee Williams", "Tubes"),
+                CatEntry("/model.php?p=ellie-nova", "Ellie Nova", "Tubes"),
+                CatEntry("/model.php?p=Elly-Clutch", "Elly Clutch", "Tubes"),
+                CatEntry("/model.php?p=Eve-Sweet", "Eve Sweet", "Tubes"),
+                CatEntry("/model.php?p=Hailey-Rose", "Hailey Rose", "Tubes"),
+                CatEntry("/model.php?p=Isa-Bella", "Isa Bella", "Tubes"),
+                CatEntry("/model.php?p=jasmine-sherni", "Jasmine Sherni", "Tubes"),
+                CatEntry("/model.php?p=Juniper-Ren", "Juniper Ren", "Tubes"),
+                CatEntry("/model.php?p=Koda-Monroe", "Koda Monroe", "Tubes"),
+                CatEntry("/model.php?p=Kali-Roses", "Kali Roses", "Tubes"),
+                CatEntry("/model.php?p=Kayley-Gunner", "Kayley Gunner", "Tubes"),
+                CatEntry("/model.php?p=Lauren-Phillips", "Lauren Phillips", "Tubes"),
+                CatEntry("/model.php?p=Lena-The-Plug", "Lena The Plug", "Tubes"),
+                CatEntry("/model.php?p=LuSirena69", "LuSirena69", "Tubes"),
+                CatEntry("/model.php?p=Lucy-Mochi", "Lucy Mochi", "Tubes"),
+                CatEntry("/model.php?p=Lula-Stocch", "Lula Stocch", "Tubes"),
+                CatEntry("/model.php?p=Luna-Doll", "Luna Doll", "Tubes"),
+                CatEntry("/model.php?p=Melissa-Stratton", "Melissa Stratton", "Tubes"),
+                CatEntry("/model.php?p=Mia-Khalifa", "Mia Khalifa", "Tubes"),
+                CatEntry("/model.php?p=Nia-Bleu", "Nia Bleu", "Tubes"),
+                CatEntry("/model.php?p=Octokuro", "Octokuro", "Tubes"),
+                CatEntry("/model.php?p=Payton-Preslee", "Payton Preslee", "Tubes"),
+                CatEntry("/model.php?p=Raissa-Bellini", "Raissa Bellini", "Tubes"),
+                CatEntry("/model.php?p=Rossa-Vaxx", "Rossa Vaxx", "Tubes"),
+                CatEntry("/model.php?p=Roxie-Sinner", "Roxie Sinner", "Tubes"),
+                CatEntry("/model.php?p=Savannah-Bond", "Savannah Bond", "Tubes"),
+                CatEntry("/model.php?p=Vivienne-Vo", "Vivienne Vo", "Tubes"),
+                CatEntry("/model.php?p=Willow-Ryder", "Willow Ryder", "Tubes"),
+                CatEntry("/model.php?p=Yasmina-Khan", "Yasmina Khan", "Tubes"),
+                CatEntry("/model.php?p=Zoey-Uso", "Zoey Uso", "Tubes")
             ),
 
-            // 6. WatchPorn (16 Categories)
+            // 6. WatchPorn (14 Studios -> Studios 18+, 2 Feeds -> Tubes)
             "watchporn" to listOf(
-                "/top-rated/" to "Top Rated",
-                "/most-popular/" to "Most Popular",
-                "/categories/primalfetish/" to "PrimalFetish",
-                "/categories/brazzersexxtra/" to "BrazzersExxtra",
-                "/categories/julesjordan/" to "JulesJordan",
-                "/categories/tabooheat/" to "TabooHeat",
-                "/categories/outofthefamily/" to "OutOfTheFamily",
-                "/categories/missax/" to "MissaX",
-                "/categories/blackedraw/" to "BlackedRaw",
-                "/categories/vixen/" to "Vixen",
-                "/categories/rkprime/" to "RKPrime",
-                "/categories/puretaboo/" to "PureTaboo",
-                "/categories/deeper/" to "Deeper",
-                "/categories/tushy/" to "Tushy",
-                "/categories/blacked/" to "Blacked",
-                "/categories/bangbus/" to "BangBus"
+                // Studios 18+
+                CatEntry("/categories/primalfetish/", "PrimalFetish", "Studios 18+"),
+                CatEntry("/categories/brazzersexxtra/", "BrazzersExxtra", "Studios 18+"),
+                CatEntry("/categories/julesjordan/", "JulesJordan", "Studios 18+"),
+                CatEntry("/categories/tabooheat/", "TabooHeat", "Studios 18+"),
+                CatEntry("/categories/outofthefamily/", "OutOfTheFamily", "Studios 18+"),
+                CatEntry("/categories/missax/", "MissaX", "Studios 18+"),
+                CatEntry("/categories/blackedraw/", "BlackedRaw", "Studios 18+"),
+                CatEntry("/categories/vixen/", "Vixen", "Studios 18+"),
+                CatEntry("/categories/rkprime/", "RKPrime", "Studios 18+"),
+                CatEntry("/categories/puretaboo/", "PureTaboo", "Studios 18+"),
+                CatEntry("/categories/deeper/", "Deeper", "Studios 18+"),
+                CatEntry("/categories/tushy/", "Tushy", "Studios 18+"),
+                CatEntry("/categories/blacked/", "Blacked", "Studios 18+"),
+                CatEntry("/categories/bangbus/", "BangBus", "Studios 18+"),
+
+                // Tubes
+                CatEntry("/top-rated/", "Top Rated", "Tubes"),
+                CatEntry("/most-popular/", "Most Popular", "Tubes")
             ),
 
-            // 7. Taboodaddy (23 Categories)
+            // 7. Taboodaddy (10 Studios -> Studios 18+, 13 Tube Categories -> Tubes)
             "taboodaddy" to listOf(
-                "" to "Latest",
-                "category/analmom" to "Anal Mom",
-                "category/brazzers" to "Brazzers",
-                "category/bangbros" to "BangBros",
-                "category/bdsm" to "BDSM",
-                "category/best" to "Best",
-                "category/brother-sister-porn" to "Brother Sister Porn",
-                "category/big-ass" to "Big Ass",
-                "category/big-dick" to "Big Dick",
-                "category/blacked" to "Blacked",
-                "category/christmas" to "Christmas",
-                "category/deep-throat" to "Deep Throat",
-                "category/deeper" to "Deeper",
-                "category/digital-playground" to "Digital Playground",
-                "category/familystrokes" to "FamilyStrokes",
-                "category/incent" to "Incent",
-                "category/milf" to "Milf",
-                "category/missax" to "Missax",
-                "category/mom-son-porn" to "Mom Son Porn",
-                "category/mommysboy" to "MommysBoy",
-                "category/puretaboo" to "Pure Taboo",
-                "category/realitykings" to "Realitykings",
-                "category/taboo" to "Taboo"
+                // Studios 18+
+                CatEntry("category/brazzers", "Brazzers", "Studios 18+"),
+                CatEntry("category/bangbros", "BangBros", "Studios 18+"),
+                CatEntry("category/blacked", "Blacked", "Studios 18+"),
+                CatEntry("category/deeper", "Deeper", "Studios 18+"),
+                CatEntry("category/digital-playground", "Digital Playground", "Studios 18+"),
+                CatEntry("category/familystrokes", "FamilyStrokes", "Studios 18+"),
+                CatEntry("category/missax", "Missax", "Studios 18+"),
+                CatEntry("category/mommysboy", "MommysBoy", "Studios 18+"),
+                CatEntry("category/puretaboo", "Pure Taboo", "Studios 18+"),
+                CatEntry("category/realitykings", "Realitykings", "Studios 18+"),
+
+                // Tubes
+                CatEntry("", "Latest", "Tubes"),
+                CatEntry("category/analmom", "Anal Mom", "Tubes"),
+                CatEntry("category/bdsm", "BDSM", "Tubes"),
+                CatEntry("category/best", "Best", "Tubes"),
+                CatEntry("category/brother-sister-porn", "Brother Sister Porn", "Tubes"),
+                CatEntry("category/big-ass", "Big Ass", "Tubes"),
+                CatEntry("category/big-dick", "Big Dick", "Tubes"),
+                CatEntry("category/christmas", "Christmas", "Tubes"),
+                CatEntry("category/deep-throat", "Deep Throat", "Tubes"),
+                CatEntry("category/incent", "Incent", "Tubes"),
+                CatEntry("category/milf", "Milf", "Tubes"),
+                CatEntry("category/mom-son-porn", "Mom Son Porn", "Tubes"),
+                CatEntry("category/taboo", "Taboo", "Tubes")
             ),
 
-            // 8. Pvzija / BluMovies (42 Categories)
+            // 8. Pvzija / BluMovies (1 Indian OTT + 39 International Studios + 2 Tube Feeds)
             "pvzija" to listOf(
-                "page/%d/" to "New Movies",
-                "page/%d/?filter=most-viewed" to "Popular Movies",
-                "director/21-sextury-video-pulse/page/%d/" to "21 Sextury Video Pulse",
-                "director/adult-source-media/page/%d/" to "Adult Source Media",
-                "director/bang/page/%d/" to "Bang",
-                "director/blacked/page/%d/" to "Blacked",
-                "director/brazzers/page/%d/" to "Brazzers",
-                "director/cutie-pie/page/%d/" to "Cutie Pie",
-                "director/ddf-network/page/%d/" to "DDF Network",
-                "director/devils-film/page/%d/" to "Devils Film",
-                "director/digital-playground/page/%d/" to "Digital Playground",
-                "director/digital-sin/page/%d/" to "Digital Sin",
-                "director/doghouse-digital/page/%d/" to "Doghouse Digital",
-                "director/dorcel-english/page/%d/" to "Dorcel English",
-                "director/elegant-angel/page/%d/" to "Elegant Angel",
-                "director/erotic-planet/page/%d/" to "Erotic Planet",
-                "director/fantasy-massage/page/%d/" to "Fantasy Massage",
-                "director/filthy-kings-clips/page/%d/" to "Filthy Kings Clips",
-                "director/house-of-fyre/page/%d/" to "House Of Fyre",
-                "director/indian-x/page/%d/" to "Indian X",
-                "director/jules-jordan-video/page/%d/" to "Jules Jordan Video",
-                "director/mario-salieri-productions/page/%d/" to "Mario Salieri Productions",
-                "director/mariskax-productions/page/%d/" to "Mariskax Productions",
-                "director/mile-high-xtreme/page/%d/" to "Mile High Xtreme",
-                "director/my-pervy-family/page/%d/" to "My Pervy Family",
-                "director/naughty-america/page/%d/" to "Naughty America",
-                "director/new-sensations/page/%d/" to "New Sensations",
-                "director/penthouse/page/%d/" to "Penthouse",
-                "director/pornfidelity/page/%d/" to "Pornfidelity",
-                "director/private/page/%d/" to "Private",
-                "director/pure-taboo/page/%d/" to "Pure Taboo",
-                "director/reality-junkies/page/%d/" to "Reality Junkies",
-                "director/reality-kings/page/%d/" to "Reality Kings",
-                "director/sexmex/page/%d/" to "Sexmex",
-                "director/sinful-xxx/page/%d/" to "Sinful XXX",
-                "director/sinner-xxx/page/%d/" to "Sinner XXX",
-                "director/sweet-sinner/page/%d/" to "Sweet Sinner",
-                "director/taboo-heat/page/%d/" to "Taboo Heat",
-                "director/team-skeet/page/%d/" to "Team Skeet",
-                "director/wicked-pictures/page/%d/" to "Wicked Pictures",
-                "director/will-tile-xxx/page/%d/" to "Will Tile XXX",
-                "director/xprime/page/%d/" to "Xprime"
+                // Indian OTT
+                CatEntry("director/indian-x/page/%d/", "Indian X", "Indian OTT"),
+
+                // Studios 18+
+                CatEntry("director/21-sextury-video-pulse/page/%d/", "21 Sextury Video Pulse", "Studios 18+"),
+                CatEntry("director/adult-source-media/page/%d/", "Adult Source Media", "Studios 18+"),
+                CatEntry("director/bang/page/%d/", "Bang", "Studios 18+"),
+                CatEntry("director/blacked/page/%d/", "Blacked", "Studios 18+"),
+                CatEntry("director/brazzers/page/%d/", "Brazzers", "Studios 18+"),
+                CatEntry("director/cutie-pie/page/%d/", "Cutie Pie", "Studios 18+"),
+                CatEntry("director/ddf-network/page/%d/", "DDF Network", "Studios 18+"),
+                CatEntry("director/devils-film/page/%d/", "Devils Film", "Studios 18+"),
+                CatEntry("director/digital-playground/page/%d/", "Digital Playground", "Studios 18+"),
+                CatEntry("director/digital-sin/page/%d/", "Digital Sin", "Studios 18+"),
+                CatEntry("director/doghouse-digital/page/%d/", "Doghouse Digital", "Studios 18+"),
+                CatEntry("director/dorcel-english/page/%d/", "Dorcel English", "Studios 18+"),
+                CatEntry("director/elegant-angel/page/%d/", "Elegant Angel", "Studios 18+"),
+                CatEntry("director/erotic-planet/page/%d/", "Erotic Planet", "Studios 18+"),
+                CatEntry("director/fantasy-massage/page/%d/", "Fantasy Massage", "Studios 18+"),
+                CatEntry("director/filthy-kings-clips/page/%d/", "Filthy Kings Clips", "Studios 18+"),
+                CatEntry("director/house-of-fyre/page/%d/", "House Of Fyre", "Studios 18+"),
+                CatEntry("director/jules-jordan-video/page/%d/", "Jules Jordan Video", "Studios 18+"),
+                CatEntry("director/mario-salieri-productions/page/%d/", "Mario Salieri Productions", "Studios 18+"),
+                CatEntry("director/mariskax-productions/page/%d/", "Mariskax Productions", "Studios 18+"),
+                CatEntry("director/mile-high-xtreme/page/%d/", "Mile High Xtreme", "Studios 18+"),
+                CatEntry("director/my-pervy-family/page/%d/", "My Pervy Family", "Studios 18+"),
+                CatEntry("director/naughty-america/page/%d/", "Naughty America", "Studios 18+"),
+                CatEntry("director/new-sensations/page/%d/", "New Sensations", "Studios 18+"),
+                CatEntry("director/penthouse/page/%d/", "Penthouse", "Studios 18+"),
+                CatEntry("director/pornfidelity/page/%d/", "Pornfidelity", "Studios 18+"),
+                CatEntry("director/private/page/%d/", "Private", "Studios 18+"),
+                CatEntry("director/pure-taboo/page/%d/", "Pure Taboo", "Studios 18+"),
+                CatEntry("director/reality-junkies/page/%d/", "Reality Junkies", "Studios 18+"),
+                CatEntry("director/reality-kings/page/%d/", "Reality Kings", "Studios 18+"),
+                CatEntry("director/sexmex/page/%d/", "Sexmex", "Studios 18+"),
+                CatEntry("director/sinful-xxx/page/%d/", "Sinful XXX", "Studios 18+"),
+                CatEntry("director/sinner-xxx/page/%d/", "Sinner XXX", "Studios 18+"),
+                CatEntry("director/sweet-sinner/page/%d/", "Sweet Sinner", "Studios 18+"),
+                CatEntry("director/taboo-heat/page/%d/", "Taboo Heat", "Studios 18+"),
+                CatEntry("director/team-skeet/page/%d/", "Team Skeet", "Studios 18+"),
+                CatEntry("director/wicked-pictures/page/%d/", "Wicked Pictures", "Studios 18+"),
+                CatEntry("director/will-tile-xxx/page/%d/", "Will Tile XXX", "Studios 18+"),
+                CatEntry("director/xprime/page/%d/", "Xprime", "Studios 18+"),
+
+                // Tubes
+                CatEntry("page/%d/", "New Movies", "Tubes"),
+                CatEntry("page/%d/?filter=most-viewed", "Popular Movies", "Tubes")
             ),
 
-            // 9. Free Porn Videos (25 Categories)
+            // 9. Free Porn Videos (All 25 -> Tubes)
             "freepornvideos" to listOf(
-                "/trending-porn-videos" to "Trending Porn Videos",
-                "/most-popular/week" to "Most Popular",
-                "/top-rated" to "Top Rated",
-                "/new-porn-videos" to "New Porn Videos",
-                "/categories/ball-licking" to "Ball Licking",
-                "/categories/ball-play" to "Ball Play",
-                "/categories/ball-sucking" to "Ball Sucking",
-                "/categories/ballerina" to "Ballerina",
-                "/categories/bathroom" to "Bathroom",
-                "/categories/bbc-big-black-cock" to "BBC (Big Black Cock)",
-                "/categories/beautiful" to "Beautiful",
-                "/categories/bbw" to "BBW",
-                "/categories/big-areolas" to "Big Areolas",
-                "/categories/cfnm" to "CFNM",
-                "/categories/cum-in-mouth" to "Cum in Mouth",
-                "/categories/doctor" to "Doctor",
-                "/categories/ebony" to "Ebony",
-                "/categories/freeuse" to "FreeUse",
-                "/categories/high-heels" to "High Heels",
-                "/categories/mature" to "Mature",
-                "/categories/massage" to "Massage",
-                "/categories/milf" to "MILF",
-                "/categories/mom" to "Mom",
-                "/categories/mexican" to "Mexican",
-                "/categories/pantyhose" to "Pantyhose"
+                CatEntry("/trending-porn-videos", "Trending Porn Videos", "Tubes"),
+                CatEntry("/most-popular/week", "Most Popular", "Tubes"),
+                CatEntry("/top-rated", "Top Rated", "Tubes"),
+                CatEntry("/new-porn-videos", "New Porn Videos", "Tubes"),
+                CatEntry("/categories/ball-licking", "Ball Licking", "Tubes"),
+                CatEntry("/categories/ball-play", "Ball Play", "Tubes"),
+                CatEntry("/categories/ball-sucking", "Ball Sucking", "Tubes"),
+                CatEntry("/categories/ballerina", "Ballerina", "Tubes"),
+                CatEntry("/categories/bathroom", "Bathroom", "Tubes"),
+                CatEntry("/categories/bbc-big-black-cock", "BBC (Big Black Cock)", "Tubes"),
+                CatEntry("/categories/beautiful", "Beautiful", "Tubes"),
+                CatEntry("/categories/bbw", "BBW", "Tubes"),
+                CatEntry("/categories/big-areolas", "Big Areolas", "Tubes"),
+                CatEntry("/categories/cfnm", "CFNM", "Tubes"),
+                CatEntry("/categories/cum-in-mouth", "Cum in Mouth", "Tubes"),
+                CatEntry("/categories/doctor", "Doctor", "Tubes"),
+                CatEntry("/categories/ebony", "Ebony", "Tubes"),
+                CatEntry("/categories/freeuse", "FreeUse", "Tubes"),
+                CatEntry("/categories/high-heels", "High Heels", "Tubes"),
+                CatEntry("/categories/mature", "Mature", "Tubes"),
+                CatEntry("/categories/massage", "Massage", "Tubes"),
+                CatEntry("/categories/milf", "MILF", "Tubes"),
+                CatEntry("/categories/mom", "Mom", "Tubes"),
+                CatEntry("/categories/mexican", "Mexican", "Tubes"),
+                CatEntry("/categories/pantyhose", "Pantyhose", "Tubes")
             )
         )
     }
 
+    /**
+     * Arranges Home Page strictly in 3 unified sections:
+     * 1. All Indian Hindi OTT categories together first
+     * 2. All International Studios (18+) together second
+     * 3. All Tubes & Models together third
+     */
     override val mainPage: List<MainPageData>
         get() {
             val enabledServers = WatchOMoviesSettingsDialog.getOrderedEnabledServers()
                 .ifEmpty { listOf(WatchOMoviesSettingsDialog.SERVERS.first()) }
             val limit = WatchOMoviesSettingsDialog.getRowsPerServer()
+            val shuffle = WatchOMoviesSettingsDialog.isShuffleHome()
 
-            val rows = mutableListOf<MainPageData>()
-            enabledServers.forEach { srv ->
-                val allCats = serverCategoryMap[srv.key].orEmpty()
-                val cats = if (limit >= 60) allCats else allCats.take(limit)
-                cats.forEach { (path, label) ->
-                    rows.add(
-                        MainPageData(
-                            name = "${srv.name} • $label",
-                            data = encodeRoute(srv.key, path)
+            val orderedGroups = listOf("Indian OTT", "Studios 18+", "Tubes")
+            val finalRows = mutableListOf<MainPageData>()
+
+            for (grp in orderedGroups) {
+                if (!WatchOMoviesSettingsDialog.isCategoryGroupAllowed(grp)) continue
+                val groupRows = mutableListOf<MainPageData>()
+                val prefixIcon = when (grp) {
+                    "Indian OTT" -> "🇮🇳"
+                    "Studios 18+" -> "🎬"
+                    else -> "📺"
+                }
+
+                enabledServers.forEach { srv ->
+                    val matchingCats = serverCategoryMap[srv.key].orEmpty().filter { it.group == grp }
+                    val sliced = if (limit >= 60) matchingCats else matchingCats.take(limit)
+                    sliced.forEach { cat ->
+                        groupRows.add(
+                            MainPageData(
+                                name = "$prefixIcon ${cat.label} • ${srv.name}",
+                                data = encodeRoute(srv.key, cat.path)
+                            )
                         )
-                    )
+                    }
+                }
+
+                if (shuffle && groupRows.size > 1) {
+                    finalRows.add(groupRows.first())
+                    finalRows.addAll(groupRows.drop(1).shuffled())
+                } else {
+                    finalRows.addAll(groupRows)
                 }
             }
-            return if (WatchOMoviesSettingsDialog.isShuffleHome() && rows.size > 1) {
-                listOf(rows.first()) + rows.drop(1).shuffled()
-            } else {
-                rows
+
+            return finalRows.ifEmpty {
+                listOf(MainPageData("🇮🇳 Ullu Originals • WatchOMovies", encodeRoute("watchomovies", "director/ullu-originals")))
             }
         }
 
@@ -1627,3 +1678,4 @@ class WatchOMoviesProvider : MainAPI() {
         return found
     }
 }
+
