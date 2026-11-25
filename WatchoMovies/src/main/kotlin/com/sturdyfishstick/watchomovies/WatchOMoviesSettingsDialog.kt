@@ -1,4 +1,4 @@
-package com.sturdyfishstick.watchomovies
+package com.sturdyfishstick.watchomoviesindian
 
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -55,7 +55,7 @@ import java.util.concurrent.atomic.AtomicInteger
 object WatchOMoviesSettingsDialog {
 
     const val LOG_TAG = "WatchOMoviesDiag"
-    private const val PREFS_NAME = "watchomovies_master_ultra_v4"
+    private const val PREFS_NAME = "watchomovies_master_ultra_v5"
     private const val CF_VERIFIED_MARKER = "__CF_VERIFIED__"
 
     private const val KEY_SRV_PREFIX = "wom_srv_"
@@ -67,11 +67,10 @@ object WatchOMoviesSettingsDialog {
     private const val KEY_CF_AUTO_RETRY = "wom_cf_auto_retry"
     private const val KEY_THEME = "wom_ui_theme"
 
-    // Category Group Filters
+    // Only 3 Master Category Group Filters
     private const val KEY_GRP_INDIAN_OTT = "wom_grp_indian_ott"
     private const val KEY_GRP_STUDIOS = "wom_grp_studios"
     private const val KEY_GRP_TUBES = "wom_grp_tubes"
-    private const val KEY_HINDI_ONLY = "wom_hindi_only"
     private const val KEY_SHUFFLE_HOME = "wom_shuffle_home"
     private const val KEY_ROWS_PER_SERVER = "wom_rows_per_server"
 
@@ -109,8 +108,13 @@ object WatchOMoviesSettingsDialog {
         val tag: String,
         val defaultUrl: String,
         val accentHex: String,
-        val groups: Set<String> // "Indian OTT", "Studios 18+", "Tubes"
-    )
+        val ottCount: Int,
+        val studioCount: Int,
+        val tubeCount: Int,
+        val groups: Set<String>
+    ) {
+        val totalCats: Int get() = ottCount + studioCount + tubeCount
+    }
 
     data class ExtractorItem(
         val key: String,
@@ -129,26 +133,30 @@ object WatchOMoviesSettingsDialog {
         val updatedAt: String = ""
     )
 
+    // All 11 Servers = 144 Indian OTT + 161 Studios 18+ + 102 Tubes = 407 Total Categories
     val SERVERS = listOf(
-        ServerItem("watchomovies", "WatchOMovies", "OTT + STUDIOS", "https://watchomovies.social", "#F43F5E", setOf("Indian OTT", "Studios 18+", "Tubes")),
-        ServerItem("tellyhd", "TellyHD Indian", "INDIAN OTT", "https://tellyhd.eu", "#FB7185", setOf("Indian OTT")),
-        ServerItem("brazzpw", "BrazzPW", "STUDIOS + TUBE", "https://brazzpw.xyz", "#38BDF8", setOf("Studios 18+", "Tubes")),
-        ServerItem("xmoviesforyou", "XMoviesForYou", "53 STUDIOS", "https://xmoviesforyou.com", "#A855F7", setOf("Studios 18+")),
-        ServerItem("xxxtime", "XXXTime", "CHANNELS + TUBE", "https://xxxtime.video", "#F59E0B", setOf("Studios 18+", "Tubes")),
-        ServerItem("watchporn", "WatchPorn", "STUDIOS + TUBE", "https://watchporn.to", "#10B981", setOf("Studios 18+", "Tubes")),
-        ServerItem("taboodaddy", "Taboodaddy", "STUDIOS + TUBE", "https://taboodaddy.com", "#EC4899", setOf("Studios 18+", "Tubes")),
-        ServerItem("pvzija", "Pvzija (BluMovies)", "40 STUDIOS", "https://xxxparodyhd.net", "#22D3EE", setOf("Indian OTT", "Studios 18+", "Tubes")),
-        ServerItem("freepornvideos", "Free Porn Videos", "TUBE", "https://www.freepornvideos.xxx", "#FACC15", setOf("Tubes"))
+        ServerItem("watchomovies", "WatchOMovies", "OTT • STUDIOS", "https://watchomovies.social", "#F43F5E", 34, 20, 2, setOf("Indian OTT", "Studios 18+", "Tubes")),
+        ServerItem("tellyhd", "TellyHD Indian", "INDIAN OTT", "https://tellyhd.eu", "#FB7185", 53, 0, 0, setOf("Indian OTT")),
+        ServerItem("prmovies", "PrmoviesIndian", "INDIAN OTT", "https://prmovies.ventures", "#FB923C", 36, 0, 0, setOf("Indian OTT")),
+        ServerItem("aagmaal", "Aagmaal", "INDIAN OTT", "https://aagmaall.com", "#EC4899", 20, 0, 0, setOf("Indian OTT")),
+        ServerItem("brazzpw", "BrazzPW", "STUDIOS • TUBE", "https://brazzpw.xyz", "#38BDF8", 0, 20, 15, setOf("Studios 18+", "Tubes")),
+        ServerItem("xmoviesforyou", "XMoviesForYou", "STUDIOS 18+", "https://xmoviesforyou.com", "#A855F7", 0, 53, 0, setOf("Studios 18+")),
+        ServerItem("xxxtime", "XXXTime", "STUDIOS • TUBE", "https://xxxtime.video", "#F59E0B", 0, 5, 43, setOf("Studios 18+", "Tubes")),
+        ServerItem("watchporn", "WatchPorn", "STUDIOS • TUBE", "https://watchporn.to", "#10B981", 0, 14, 2, setOf("Studios 18+", "Tubes")),
+        ServerItem("taboodaddy", "Taboodaddy", "STUDIOS • TUBE", "https://taboodaddy.com", "#C084FC", 0, 10, 13, setOf("Studios 18+", "Tubes")),
+        ServerItem("pvzija", "Pvzija (BluMovies)", "ALL 3 GROUPS", "https://xxxparodyhd.net", "#22D3EE", 1, 39, 2, setOf("Indian OTT", "Studios 18+", "Tubes")),
+        ServerItem("freepornvideos", "Free Porn Videos", "TUBE", "https://www.freepornvideos.xxx", "#FACC15", 0, 0, 25, setOf("Tubes"))
     )
 
     val EXTRACTORS = listOf(
+        ExtractorItem("vidhost", "Vidhost Stream API", "vidhost • aagmaall.com (/api/stream)", "M3U8"),
+        ExtractorItem("speedostream", "SpeedoStream & VidSrc", "speedostream • vidsrc • prmovies/watchomovies", "M3U8"),
         ExtractorItem("lulustream", "LuluStream / Vid / Vdo / Pvp", "lulustream • luluvid • luluvdo • lulupvp", "M3U8"),
         ExtractorItem("ktplayer", "KtPlayer Deobfuscator + WebView", "watchporn.to • flashvars license solver", "MP4/HLS"),
         ExtractorItem("vidhide", "VidHide / Xtapes Mirrors", "vidsp • vidhideplus • dhtpre • toul • xtapes", "HLS"),
         ExtractorItem("filemoon", "FileMoon Extractor", "filemoon.sx • cdntelly", "EMBED"),
         ExtractorItem("doodstream", "DoodStream / Ds2play", "ds2play.com • dood.wf", "MP4"),
         ExtractorItem("bigwarp", "BigWarp Direct", "bigwarp.io", "HLS/MP4"),
-        ExtractorItem("speedostream", "SpeedoStream & VidSrc", "speedostream • vidsrc embeds", "M3U8"),
         ExtractorItem("streamtape", "StreamTape / MixDrop", "streamtape • mixdrop mirrors", "MIRROR")
     )
 
@@ -186,7 +194,7 @@ object WatchOMoviesSettingsDialog {
     }
 
     // =========================================================================
-    // Persistent Getters & Setters (Domains, Category Groups, Toggles, Cookies)
+    // Persistent Getters & Setters (Domains, 3 Category Groups, Toggles)
     // =========================================================================
     fun getServerDomain(serverKey: String, ctx: Context? = appContext): String {
         val srv = SERVERS.firstOrNull { it.key.equals(serverKey, true) }
@@ -238,21 +246,6 @@ object WatchOMoviesSettingsDialog {
         prefs(ctx)?.edit()?.putBoolean(key, enabled)?.apply()
     }
 
-    fun isHindiOnly(ctx: Context? = appContext): Boolean =
-        prefs(ctx)?.getBoolean(KEY_HINDI_ONLY, false) ?: false
-
-    fun setHindiOnly(ctx: Context, enabled: Boolean) {
-        prefs(ctx)?.edit()?.putBoolean(KEY_HINDI_ONLY, enabled)?.apply()
-    }
-
-    /**
-     * Checks whether an individual category group ("Indian OTT", "Studios 18+", "Tubes") is allowed.
-     */
-    fun isCategoryGroupAllowed(group: String, ctx: Context? = appContext): Boolean {
-        if (isHindiOnly(ctx) && !group.equals("Indian OTT", true)) return false
-        return isGroupEnabled(group, ctx)
-    }
-
     fun isShuffleHome(ctx: Context? = appContext): Boolean =
         prefs(ctx)?.getBoolean(KEY_SHUFFLE_HOME, false) ?: false
 
@@ -260,11 +253,12 @@ object WatchOMoviesSettingsDialog {
         prefs(ctx)?.edit()?.putBoolean(KEY_SHUFFLE_HOME, enabled)?.apply()
     }
 
+    // Default 60 = ALL categories included (nothing missing)
     fun getRowsPerServer(ctx: Context? = appContext): Int =
-        prefs(ctx)?.getInt(KEY_ROWS_PER_SERVER, 10) ?: 10
+        prefs(ctx)?.getInt(KEY_ROWS_PER_SERVER, 60) ?: 60
 
     fun setRowsPerServer(ctx: Context, count: Int) {
-        prefs(ctx)?.edit()?.putInt(KEY_ROWS_PER_SERVER, count.coerceIn(2, 60))?.apply()
+        prefs(ctx)?.edit()?.putInt(KEY_ROWS_PER_SERVER, count.coerceIn(5, 60))?.apply()
     }
 
     fun isServerRawChecked(key: String, ctx: Context? = appContext): Boolean =
@@ -273,7 +267,7 @@ object WatchOMoviesSettingsDialog {
     fun isServerEnabled(key: String, ctx: Context? = appContext): Boolean {
         if (!isServerRawChecked(key, ctx)) return false
         val srv = SERVERS.firstOrNull { it.key.equals(key, true) } ?: return true
-        return srv.groups.any { isCategoryGroupAllowed(it, ctx) }
+        return srv.groups.any { isGroupEnabled(it, ctx) }
     }
 
     fun setServerEnabled(ctx: Context, key: String, enabled: Boolean) {
@@ -662,7 +656,7 @@ object WatchOMoviesSettingsDialog {
             setTextColor(Color.WHITE)
         })
         box.addView(TextView(ctx).apply {
-            text = "Default: ${srv.defaultUrl}"
+            text = "Default: ${srv.defaultUrl} • ${srv.totalCats} categories"
             textSize = 10f
             setTextColor(safeColor("#94A3B8"))
             setPadding(0, dp(ctx, 3), 0, dp(ctx, 10))
@@ -959,7 +953,7 @@ object WatchOMoviesSettingsDialog {
             val statusDot: View,
             val nameTv: TextView,
             val catTv: TextView,
-            val tagTv: TextView,
+            val countTv: TextView,
             val statusTv: TextView,
             val urlTv: TextView,
             val editBtn: TextView,
@@ -1010,24 +1004,24 @@ object WatchOMoviesSettingsDialog {
                     }
                 }
                 val catTv = TextView(ctx).apply {
-                    textSize = 7.8f; isSingleLine = true; setTypeface(typeface, Typeface.BOLD)
+                    textSize = 7.6f; isSingleLine = true; setTypeface(typeface, Typeface.BOLD)
                     setPadding(dp(ctx, 5), dp(ctx, 1), dp(ctx, 5), dp(ctx, 1))
                 }
-                val tagTv = TextView(ctx).apply {
-                    textSize = 7.8f; isSingleLine = true; setTypeface(typeface, Typeface.BOLD)
+                val countTv = TextView(ctx).apply {
+                    textSize = 7.6f; isSingleLine = true; setTypeface(typeface, Typeface.BOLD)
                     setPadding(dp(ctx, 5), dp(ctx, 1), dp(ctx, 5), dp(ctx, 1))
                     layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                         marginStart = dp(ctx, 4)
                     }
                 }
                 val statusTv = TextView(ctx).apply {
-                    textSize = 7.8f; isSingleLine = true; setTypeface(typeface, Typeface.BOLD)
+                    textSize = 7.6f; isSingleLine = true; setTypeface(typeface, Typeface.BOLD)
                     setPadding(dp(ctx, 5), dp(ctx, 1), dp(ctx, 5), dp(ctx, 1))
                     layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                         marginStart = dp(ctx, 4)
                     }
                 }
-                badgeLine.addView(catTv); badgeLine.addView(tagTv); badgeLine.addView(statusTv)
+                badgeLine.addView(catTv); badgeLine.addView(countTv); badgeLine.addView(statusTv)
 
                 val urlTv = TextView(ctx).apply {
                     textSize = 9.2f; isSingleLine = true; ellipsize = TextUtils.TruncateAt.END
@@ -1068,7 +1062,7 @@ object WatchOMoviesSettingsDialog {
 
                 card.addView(avatarWrap); card.addView(col); card.addView(editBtn); card.addView(orderCol); card.addView(sw)
 
-                holder = VH(card, avatarTv, statusDot, nameTv, catTv, tagTv, statusTv, urlTv, editBtn, upBtn, downBtn, sw)
+                holder = VH(card, avatarTv, statusDot, nameTv, catTv, countTv, statusTv, urlTv, editBtn, upBtn, downBtn, sw)
                 card.tag = holder
                 rowView = card
             } else {
@@ -1107,14 +1101,17 @@ object WatchOMoviesSettingsDialog {
             holder.nameTv.text = srv.name
             holder.nameTv.alpha = if (active) 1f else 0.55f
 
-            val activeGroups = srv.groups.filter { isCategoryGroupAllowed(it, ctx) }
-            holder.catTv.text = if (activeGroups.isEmpty()) "FILTERED" else activeGroups.joinToString(" • ")
+            val activeGroups = srv.groups.filter { isGroupEnabled(it, ctx) }
+            holder.catTv.text = if (activeGroups.isEmpty()) "GROUP OFF" else activeGroups.joinToString(" • ")
             holder.catTv.setTextColor(safeColor("#38BDF8"))
             holder.catTv.background = tintBadgeBg("#38BDF8", dpf(ctx, 6f), 32, 70)
 
-            holder.tagTv.text = srv.tag
-            holder.tagTv.setTextColor(safeColor(srv.accentHex))
-            holder.tagTv.background = tintBadgeBg(srv.accentHex, dpf(ctx, 6f), 32, 70)
+            val activeCatCount = (if (isGroupEnabled("Indian OTT", ctx)) srv.ottCount else 0) +
+                (if (isGroupEnabled("Studios 18+", ctx)) srv.studioCount else 0) +
+                (if (isGroupEnabled("Tubes", ctx)) srv.tubeCount else 0)
+            holder.countTv.text = "$activeCatCount/${srv.totalCats}"
+            holder.countTv.setTextColor(safeColor(srv.accentHex))
+            holder.countTv.background = tintBadgeBg(srv.accentHex, dpf(ctx, 6f), 32, 70)
 
             if (health != null) {
                 holder.statusTv.visibility = View.VISIBLE
@@ -1198,14 +1195,14 @@ object WatchOMoviesSettingsDialog {
             setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
         })
         titleCol.addView(TextView(ctx).apply {
-            text = "INDIAN OTT • STUDIOS 18+ • TUBES (351 ROWS)"
+            text = "11 SERVERS • 407 CATEGORIES • 3 CLEAN GROUPS"
             textSize = 8.2f; letterSpacing = 0.08f; isSingleLine = true
             setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor("#94A3B8"))
             setPadding(0, dp(ctx, 2), 0, 0)
         })
         titleRow.addView(titleCol)
         titleRow.addView(TextView(ctx).apply {
-            text = "⚡ TURBO FAST"
+            text = "⚡ PRO ENGINE"
             textSize = 9f; isSingleLine = true; setTypeface(typeface, Typeface.BOLD)
             setTextColor(safeColor("#6EE7B7"))
             background = tintBadgeBg("#10B981", dpf(ctx, 10f), 46, 130)
@@ -1216,35 +1213,37 @@ object WatchOMoviesSettingsDialog {
         val statsRow = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-                .apply { topMargin = dp(ctx, 11) }
+                .apply { topMargin = dp(ctx, 10) }
         }
         fun statChip(label: String, colorHex: String, endDp: Int): Pair<LinearLayout, TextView> {
             val box = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 background = glassCardBg("#0E1525", "#090D18", alphaColor(colorHex, 75), dpf(ctx, 12f), 2)
-                setPadding(dp(ctx, 10), dp(ctx, 7), dp(ctx, 10), dp(ctx, 7))
+                setPadding(dp(ctx, 9), dp(ctx, 7), dp(ctx, 9), dp(ctx, 7))
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
                     if (endDp > 0) marginEnd = dp(ctx, endDp)
                 }
             }
-            val valTv = TextView(ctx).apply { text = "-"; textSize = 13f; isSingleLine = true; setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor(colorHex)) }
-            val lblTv = TextView(ctx).apply { text = label; textSize = 7.8f; letterSpacing = 0.08f; isSingleLine = true; setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor("#8A98B5")); setPadding(0, dp(ctx, 1), 0, 0) }
+            val valTv = TextView(ctx).apply { text = "-"; textSize = 12.5f; isSingleLine = true; setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor(colorHex)) }
+            val lblTv = TextView(ctx).apply { text = label; textSize = 7.4f; letterSpacing = 0.06f; isSingleLine = true; setTypeface(typeface, Typeface.BOLD); setTextColor(safeColor("#8A98B5")); setPadding(0, dp(ctx, 1), 0, 0) }
             box.addView(valTv); box.addView(lblTv)
             return box to valTv
         }
-        val (srvChip, srvValTv) = statChip("SERVERS", "#38BDF8", 7)
-        val (extChip, extValTv) = statChip("GROUPS ON", "#C084FC", 7)
-        val (spdChip, spdValTv) = statChip("HOME ROWS", "#FBBF24", 0)
-        statsRow.addView(srvChip); statsRow.addView(extChip); statsRow.addView(spdChip)
+        val (ottChip, ottValTv) = statChip("🇮🇳 INDIAN OTT", "#FB7185", 6)
+        val (stdChip, stdValTv) = statChip("🎬 STUDIOS 18+", "#38BDF8", 6)
+        val (tubChip, tubValTv) = statChip("📺 TUBES", "#FBBF24", 0)
+        statsRow.addView(ottChip); statsRow.addView(stdChip); statsRow.addView(tubChip)
         header.addView(statsRow)
         root.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(ctx, 10) })
 
         fun refreshStats() {
-            val srvOn = SERVERS.count { isServerEnabled(it.key, ctx) }
-            srvValTv.text = "$srvOn/${SERVERS.size}"
-            val grpOn = listOf("Indian OTT", "Studios 18+", "Tubes").count { isCategoryGroupAllowed(it, ctx) }
-            extValTv.text = "$grpOn/3"
-            spdValTv.text = if (currentRowsPerServer >= 60) "ALL" else "${currentRowsPerServer}/srv"
+            val enabledSrvs = SERVERS.filter { isServerRawChecked(it.key, ctx) }
+            val activeOtt = if (isGroupEnabled("Indian OTT", ctx)) enabledSrvs.sumOf { it.ottCount } else 0
+            val activeStd = if (isGroupEnabled("Studios 18+", ctx)) enabledSrvs.sumOf { it.studioCount } else 0
+            val activeTub = if (isGroupEnabled("Tubes", ctx)) enabledSrvs.sumOf { it.tubeCount } else 0
+            ottValTv.text = "$activeOtt/144"
+            stdValTv.text = "$activeStd/161"
+            tubValTv.text = "$activeTub/102"
         }
         refreshStats()
 
@@ -1254,12 +1253,12 @@ object WatchOMoviesSettingsDialog {
             background = cardBg("#0C111D", "#1E2940", dpf(ctx, 14f), 2)
             setPadding(dp(ctx, 4), dp(ctx, 4), dp(ctx, 4), dp(ctx, 4))
         }
-        val tabTitles = listOf("⚡ Servers", "🧩 Extractors", "🎛️ Filters & UI", "🛡️ CF & Health")
+        val tabTitles = listOf("⚡ Servers (11)", "🧩 Extractors", "🎛️ 3 Groups & UI", "🛡️ CF & Health")
         val tabButtons = tabTitles.map { title ->
             Button(ctx).apply {
-                text = title; textSize = 10.5f; isAllCaps = false; isSingleLine = true
+                text = title; textSize = 10.3f; isAllCaps = false; isSingleLine = true
                 setTypeface(typeface, Typeface.BOLD)
-                setPadding(dp(ctx, 11), 0, dp(ctx, 11), 0)
+                setPadding(dp(ctx, 10), 0, dp(ctx, 10), 0)
                 layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(ctx, 35)).apply { marginEnd = dp(ctx, 3) }
                 attachPressAnim(this)
             }
@@ -1268,13 +1267,13 @@ object WatchOMoviesSettingsDialog {
         val tabScroll = HorizontalScrollView(ctx).apply { isHorizontalScrollBarEnabled = false; addView(tabBar) }
         root.addView(tabScroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(ctx, 9) })
 
-        // ── Tab 1 Controls: Search + Category Filter Chips ───────────────────
+        // ── Tab 1 Controls: Search + 3 Group Filter Chips ────────────────────
         val actionRow = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(ctx, 7) }
         }
         val searchBox = EditText(ctx).apply {
-            hint = "🔍 Search servers, domain..."
+            hint = "🔍 Search Prmovies, Aagmaal, TellyHD..."
             setHintTextColor(safeColor("#64748B")); setTextColor(Color.WHITE); textSize = 12f; isSingleLine = true
             background = cardBg("#0F1524", "#24314B", dpf(ctx, 12f), 2)
             setPadding(dp(ctx, 11), dp(ctx, 6), dp(ctx, 11), dp(ctx, 6))
@@ -1314,7 +1313,13 @@ object WatchOMoviesSettingsDialog {
         }
         categories.forEach { cat ->
             val tv = TextView(ctx).apply {
-                text = cat; textSize = 10f; setTypeface(typeface, Typeface.BOLD)
+                text = when (cat) {
+                    "Indian OTT" -> "🇮🇳 Indian OTT"
+                    "Studios 18+" -> "🎬 Studios 18+"
+                    "Tubes" -> "📺 Tubes"
+                    else -> "All (11)"
+                }
+                textSize = 10f; setTypeface(typeface, Typeface.BOLD)
                 setPadding(dp(ctx, 11), dp(ctx, 6), dp(ctx, 11), dp(ctx, 6))
                 layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = dp(ctx, 6) }
                 attachPressAnim(this)
@@ -1420,7 +1425,7 @@ object WatchOMoviesSettingsDialog {
         val healthPane = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
 
         // ── Tab 2: Extractors ────────────────────────────────────────────────
-        val extSec = makeSectionLabel(ctx, "Built-In & Custom Extractors", activeTheme.primaryHex)
+        val extSec = makeSectionLabel(ctx, "Built-In & Custom Extractors (${EXTRACTORS.size})", activeTheme.primaryHex)
         themedSectionBars.add(extSec.getChildAt(0))
         extractorPane.addView(extSec)
 
@@ -1452,7 +1457,7 @@ object WatchOMoviesSettingsDialog {
             col.addView(headRow)
             col.addView(TextView(ctx).apply { text = ext.hosts; textSize = 9.5f; setTextColor(safeColor("#7D8AA6")); setPadding(0, dp(ctx, 3), 0, 0) })
             val sw = NeonSwitch(ctx, isExtractorEnabled(ext.key, ctx), activeTheme.primaryHex).apply {
-                onCheckedChange = { checked -> setExtractorEnabled(ctx, ext.key, checked); refreshStats() }
+                onCheckedChange = { checked -> setExtractorEnabled(ctx, ext.key, checked) }
             }
             themedSwitches.add(sw)
             card.setOnClickListener { sw.toggle() }
@@ -1460,7 +1465,44 @@ object WatchOMoviesSettingsDialog {
             extractorPane.addView(card)
         }
 
-        // ── Tab 3: Category Filters, Quality & Theme ─────────────────────────
+        // ── Tab 3: Only 3 Clean Group Filters + Performance + Theme ──────────
+        fun makeGroupCard(parent: LinearLayout, title: String, desc: String, badgeText: String, badgeHex: String, initial: Boolean, onChange: (Boolean) -> Unit) {
+            val card = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                background = glassCardBg("#131A2B", "#0D121F", alphaColor(badgeHex, 85), dpf(ctx, 15f), 2)
+                setPadding(dp(ctx, 10), dp(ctx, 11), dp(ctx, 12), dp(ctx, 11))
+                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(ctx, 8) }
+            }
+            card.addView(View(ctx).apply {
+                layoutParams = LinearLayout.LayoutParams(dp(ctx, 4), dp(ctx, 34)).apply { marginEnd = dp(ctx, 10) }
+                background = pillBg(badgeHex, dpf(ctx, 4f))
+            })
+            val col = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(ctx, 8) }
+            }
+            val topLine = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+            topLine.addView(TextView(ctx).apply {
+                text = title; textSize = 13f; isSingleLine = true; ellipsize = TextUtils.TruncateAt.END
+                setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            topLine.addView(TextView(ctx).apply {
+                text = badgeText; textSize = 8.2f; isSingleLine = true; setTypeface(typeface, Typeface.BOLD)
+                setTextColor(safeColor(badgeHex))
+                background = tintBadgeBg(badgeHex, dpf(ctx, 6f), 38, 95)
+                setPadding(dp(ctx, 6), dp(ctx, 2), dp(ctx, 6), dp(ctx, 2))
+                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = dp(ctx, 6) }
+            })
+            col.addView(topLine)
+            col.addView(TextView(ctx).apply { text = desc; textSize = 10f; setTextColor(safeColor("#8A98B5")); setPadding(0, dp(ctx, 3), 0, 0) })
+            val sw = NeonSwitch(ctx, initial, activeTheme.primaryHex).apply { onCheckedChange = onChange }
+            themedSwitches.add(sw)
+            card.setOnClickListener { sw.toggle() }
+            card.addView(col); card.addView(sw)
+            parent.addView(card)
+        }
+
         fun makeToggleCard(parent: LinearLayout, title: String, desc: String, initial: Boolean, onChange: (Boolean) -> Unit) {
             val card = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
@@ -1531,30 +1573,47 @@ object WatchOMoviesSettingsDialog {
             parent.addView(card)
         }
 
-        val catSec = makeSectionLabel(ctx, "🎛️ Category Group Filters (Separated)", activeTheme.primaryHex)
+        // ONLY 3 GROUP FILTERS
+        val catSec = makeSectionLabel(ctx, "🎛️ 3 Category Group Filters", activeTheme.primaryHex)
         themedSectionBars.add(catSec.getChildAt(0))
         streamPane.addView(catSec)
-        makeToggleCard(streamPane, "🇮🇳 Indian OTT / Web Series (88)", "Sab Hindi & Indian OTT ek jagah (Ullu, Fliz, PrimePlay, TellyHD, etc.)", isGroupEnabled("Indian OTT", ctx)) {
-            setGroupEnabled(ctx, "Indian OTT", it); applyServerFilter()
-        }
-        makeToggleCard(streamPane, "🎬 International Studios 18+ (161)", "Saare Studios ek jagah (Brazzers, Vixen, Blacked, Tushy, XMovies, etc.)", isGroupEnabled("Studios 18+", ctx)) {
-            setGroupEnabled(ctx, "Studios 18+", it); applyServerFilter()
-        }
-        makeToggleCard(streamPane, "📺 Tubes & Models (102)", "Baaki sab Tube tags, Feeds & Models ek jagah", isGroupEnabled("Tubes", ctx)) {
-            setGroupEnabled(ctx, "Tubes", it); applyServerFilter()
-        }
-        makeToggleCard(streamPane, "Hindi OTT Only Mode 🇮🇳", "Sirf Indian Hindi OTT categories dikhayein (Studios & Tubes hide)", isHindiOnly(ctx)) {
-            setHindiOnly(ctx, it); applyServerFilter()
-        }
-        makeToggleCard(streamPane, "Shuffle Rows Inside Groups", "Har group ke andar rows randomize karein", isShuffleHome(ctx)) {
+
+        makeGroupCard(
+            streamPane,
+            "🇮🇳 Indian OTT / Web Series",
+            "Sirf Indian Hindi OTT (WatchOMovies 34 + TellyHD 53 + Prmovies 36 + Aagmaal 20 + Indian X 1)",
+            "144 CATS",
+            "#FB7185",
+            isGroupEnabled("Indian OTT", ctx)
+        ) { setGroupEnabled(ctx, "Indian OTT", it); applyServerFilter() }
+
+        makeGroupCard(
+            streamPane,
+            "🎬 International Studios (18+)",
+            "Saare 18+ Studios (XMovies 53 + Pvzija 39 + WatchOMovies 20 + BrazzPW 20 + WatchPorn 14 + Taboo 10 + XXXTime 5)",
+            "161 CATS",
+            "#38BDF8",
+            isGroupEnabled("Studios 18+", ctx)
+        ) { setGroupEnabled(ctx, "Studios 18+", it); applyServerFilter() }
+
+        makeGroupCard(
+            streamPane,
+            "📺 Tubes & Models",
+            "Baaki sab Tube tags, Feeds & Models (XXXTime 43 + FPV 25 + BrazzPW 15 + Taboo 13 + Others 6)",
+            "102 CATS",
+            "#FBBF24",
+            isGroupEnabled("Tubes", ctx)
+        ) { setGroupEnabled(ctx, "Tubes", it); applyServerFilter() }
+
+        makeToggleCard(streamPane, "Shuffle Rows Inside Groups", "Har group ke andar categories randomize karein", isShuffleHome(ctx)) {
             setShuffleHome(ctx, it)
         }
 
         val pSec = makeSectionLabel(ctx, "🚀 Speed & Home Load Control", activeTheme.primaryHex)
         themedSectionBars.add(pSec.getChildAt(0))
         streamPane.addView(pSec)
-        makeStepperCard(streamPane, "Home Rows Per Server", "Har server se rows (10 = balanced, 60 = All 351)", currentRowsPerServer, 5, 5, 60, "") {
-            currentRowsPerServer = it; setRowsPerServer(ctx, it); refreshStats()
+        makeStepperCard(streamPane, "Rows Per Server Limit", "ALL = Sab 407 categories show hongi (5-55 = limit)", currentRowsPerServer, 5, 5, 60, "") {
+            currentRowsPerServer = it; setRowsPerServer(ctx, it)
         }
         makeStepperCard(streamPane, "Parallel Search Workers", "Concurrent server search threads", currentConcurrency, 1, 2, 15, "x") {
             currentConcurrency = it; setConcurrency(ctx, it)
@@ -1628,7 +1687,7 @@ object WatchOMoviesSettingsDialog {
         }
         val cfHeader = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         cfHeader.addView(TextView(ctx).apply {
-            text = "🛡️ Cloudflare Shield (All 9 Servers)"
+            text = "🛡️ Cloudflare Shield (${SERVERS.size} Servers)"
             textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         })
@@ -1720,7 +1779,7 @@ object WatchOMoviesSettingsDialog {
 
         refreshHealthPane = {
             logTv.text = if (diagLogs.isEmpty()) {
-                "> Ready • 9 Servers Loaded • Tag: $LOG_TAG"
+                "> Ready • 11 Servers • 407 Categories • Tag: $LOG_TAG"
             } else {
                 diagLogs.asReversed().take(60).joinToString("\n")
             }
@@ -1738,13 +1797,24 @@ object WatchOMoviesSettingsDialog {
                 actionRow.visibility = View.VISIBLE
                 chipScroll.visibility = View.VISIBLE
                 scrollView.visibility = View.GONE
+                serversListView.alpha = 0f
+                serversListView.translationY = dpf(ctx, 6f)
+                serversListView.animate().alpha(1f).translationY(0f).setDuration(140).start()
             } else {
                 serversListView.visibility = View.GONE
                 actionRow.visibility = View.GONE
                 chipScroll.visibility = View.GONE
                 scrollView.visibility = View.VISIBLE
                 scrollView.scrollTo(0, 0)
-                scrollPanes.forEachIndexed { i, p -> p.visibility = if (i == idx - 1) View.VISIBLE else View.GONE }
+                scrollPanes.forEachIndexed { i, p ->
+                    val show = (i == idx - 1)
+                    p.visibility = if (show) View.VISIBLE else View.GONE
+                    if (show) {
+                        p.alpha = 0f
+                        p.translationY = dpf(ctx, 6f)
+                        p.animate().alpha(1f).translationY(0f).setDuration(140).start()
+                    }
+                }
                 if (idx == 3) refreshHealthPane()
             }
             tabButtons.forEachIndexed { i, btn ->
@@ -1832,3 +1902,4 @@ object WatchOMoviesSettingsDialog {
         }
     }
 }
+
