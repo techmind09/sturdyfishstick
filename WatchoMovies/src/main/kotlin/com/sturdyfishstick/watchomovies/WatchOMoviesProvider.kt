@@ -168,15 +168,14 @@ class WatchOMoviesProvider : MainAPI() {
     }
 
     // =========================================================================
-    // Classified Categories Across All 9 Servers
-    // Groups: "Indian OTT", "Studios 18+", "Tubes"
+    // ALL 407 CATEGORIES CLASSIFIED IN THEIR EXACT GROUPS (ZERO MISSING)
     // =========================================================================
     private val serverCategoryMap: Map<String, List<CatEntry>> by lazy {
         val currentYear = Calendar.getInstance().get(Calendar.YEAR)
         mapOf(
-            // 1. WatchOMovies (34 Indian OTT + 20 International Studios + 2 General Tubes)
+            // 1. WatchOMovies (34 Indian OTT + 20 International Studios + 2 Tubes = 56)
             "watchomovies" to listOf(
-                // Indian OTT (Hindi)
+                // Indian OTT (34)
                 CatEntry("director/ullu-originals", "Ullu Originals", "Indian OTT"),
                 CatEntry("director/fliz-movies", "Fliz Movies", "Indian OTT"),
                 CatEntry("director/nuefliks", "Nuefliks", "Indian OTT"),
@@ -212,7 +211,7 @@ class WatchOMoviesProvider : MainAPI() {
                 CatEntry("director/glamheart", "Glamheart", "Indian OTT"),
                 CatEntry("director/worldprime", "Worldprime", "Indian OTT"),
 
-                // International Studios (18+)
+                // Studios 18+ (20)
                 CatEntry("genre/brazzers", "Brazzers", "Studios 18+"),
                 CatEntry("genre/bangbros", "Bangbros", "Studios 18+"),
                 CatEntry("genre/naughty-america", "Naughty America", "Studios 18+"),
@@ -234,7 +233,7 @@ class WatchOMoviesProvider : MainAPI() {
                 CatEntry("genre/girlsway", "GirlsWay", "Studios 18+"),
                 CatEntry("genre/mylf", "MYLF", "Studios 18+"),
 
-                // Tubes / General Feeds
+                // Tubes (2)
                 CatEntry("", "Latest Updates", "Tubes"),
                 CatEntry("movies", "Movies", "Tubes")
             ),
@@ -296,9 +295,73 @@ class WatchOMoviesProvider : MainAPI() {
                 CatEntry("genre/meetx", "Meetx", "Indian OTT")
             ),
 
-            // 3. BrazzPW (20 Studio Sites -> Studios 18+, 15 Feeds/Tags -> Tubes)
+            // 3. PrmoviesIndian (All 36 -> Indian OTT)
+            "prmovies" to listOf(
+                CatEntry("director/ullu-originals", "Ullu Originals", "Indian OTT"),
+                CatEntry("director/uncut", "Uncut", "Indian OTT"),
+                CatEntry("director/fliz-movies", "Fliz Movies", "Indian OTT"),
+                CatEntry("director/nuefliks", "Nuefliks", "Indian OTT"),
+                CatEntry("director/hotshots", "Hotshots", "Indian OTT"),
+                CatEntry("director/hunters", "Hunters", "Indian OTT"),
+                CatEntry("director/moodx", "MoodX", "Indian OTT"),
+                CatEntry("director/voovi", "VooVi", "Indian OTT"),
+                CatEntry("director/primeplay", "PrimePlay", "Indian OTT"),
+                CatEntry("director/besharams", "Besharams", "Indian OTT"),
+                CatEntry("director/kooku", "Kooku", "Indian OTT"),
+                CatEntry("director/gupchup", "Gupchup", "Indian OTT"),
+                CatEntry("director/feneomovies", "Feneomovies", "Indian OTT"),
+                CatEntry("director/cinemadosti", "Cinemadosti", "Indian OTT"),
+                CatEntry("director/primeflix", "Primeflix", "Indian OTT"),
+                CatEntry("director/gemplex", "Gemplex", "Indian OTT"),
+                CatEntry("director/rabbit", "Rabbit", "Indian OTT"),
+                CatEntry("director/hotmasti", "HotMasti", "Indian OTT"),
+                CatEntry("director/boommovies", "BoomMovies", "Indian OTT"),
+                CatEntry("director/cliffmovies", "CliffMovies", "Indian OTT"),
+                CatEntry("director/mastiprime", "MastiPrime", "Indian OTT"),
+                CatEntry("director/ek-night-show", "Ek Night Show", "Indian OTT"),
+                CatEntry("director/flixskmovies", "Flixskmovies", "Indian OTT"),
+                CatEntry("director/lootlo", "Lootlo", "Indian OTT"),
+                CatEntry("director/hootzy", "Hootzy", "Indian OTT"),
+                CatEntry("director/balloons", "Balloons", "Indian OTT"),
+                CatEntry("director/big-movie-zoo", "Big Movie Zoo", "Indian OTT"),
+                CatEntry("director/bambooflix", "Bambooflix", "Indian OTT"),
+                CatEntry("director/piliflix", "Piliflix", "Indian OTT"),
+                CatEntry("director/11upmovies", "11upmovies", "Indian OTT"),
+                CatEntry("director/eightshots", "Eightshots", "Indian OTT"),
+                CatEntry("director/i-entertainment", "I-Entertainment", "Indian OTT"),
+                CatEntry("director/hothitfilms", "HotHitFilms", "Indian OTT"),
+                CatEntry("director/worldprime", "Worldprime", "Indian OTT"),
+                CatEntry("director/chikooflix", "Chikooflix", "Indian OTT"),
+                CatEntry("director/glamheart", "Glamheart", "Indian OTT")
+            ),
+
+            // 4. Aagmaal (All 20 -> Indian OTT)
+            "aagmaal" to listOf(
+                CatEntry("", "Latest", "Indian OTT"),
+                CatEntry("category/ullu-originals-web-series", "Ullu", "Indian OTT"),
+                CatEntry("tag/moodx", "MoodX", "Indian OTT"),
+                CatEntry("tag/hunters", "Hunters", "Indian OTT"),
+                CatEntry("tag/primeplay", "PrimePlay", "Indian OTT"),
+                CatEntry("tag/kooku", "Kooku", "Indian OTT"),
+                CatEntry("tag/besharams", "Besharams", "Indian OTT"),
+                CatEntry("tag/neonx", "NeonX", "Indian OTT"),
+                CatEntry("category/aagmaal", "AAGmaal", "Indian OTT"),
+                CatEntry("category/best-videos", "Best videos", "Indian OTT"),
+                CatEntry("category/bindas-times", "Bindas Times", "Indian OTT"),
+                CatEntry("category/fukrey-app", "Fukrey.App", "Indian OTT"),
+                CatEntry("category/hindi-hot-web", "Hindi Hot Web", "Indian OTT"),
+                CatEntry("category/hot-hindi-web", "Hot Hindi Web", "Indian OTT"),
+                CatEntry("category/hotx", "HotX", "Indian OTT"),
+                CatEntry("category/indian-uncut-web", "Indian Uncut Web", "Indian OTT"),
+                CatEntry("category/mojflix", "MojFlix", "Indian OTT"),
+                CatEntry("category/moodx-uncut", "MoodX Uncut", "Indian OTT"),
+                CatEntry("category/neonx-uncut", "NeonX Uncut", "Indian OTT"),
+                CatEntry("category/xprime", "XPrime", "Indian OTT")
+            ),
+
+            // 5. BrazzPW (20 Studio Sites -> Studios 18+, 15 Feeds/Tags -> Tubes = 35)
             "brazzpw" to listOf(
-                // Studios 18+
+                // Studios 18+ (20)
                 CatEntry("/videos/site/65/big-wet-butts/", "Big Wet Butts", "Studios 18+"),
                 CatEntry("/videos/site/66/baby-got-boobs/", "Baby Got Boobs", "Studios 18+"),
                 CatEntry("/videos/site/62/doctor-adventures/", "Doctor Adventures", "Studios 18+"),
@@ -320,7 +383,7 @@ class WatchOMoviesProvider : MainAPI() {
                 CatEntry("/videos/site/78/milfs-like-it-big/", "Milfs like it big", "Studios 18+"),
                 CatEntry("/videos/site/77/pornstar-like-it-big/", "Pornstar like it big", "Studios 18+"),
 
-                // Tubes
+                // Tubes (15)
                 CatEntry("/videos/newest/", "Newest Videos", "Tubes"),
                 CatEntry("/videos/sortby/beingwatched/", "Being Watched", "Tubes"),
                 CatEntry("/videos/sortby/rating/", "Top Rated", "Tubes"),
@@ -338,7 +401,7 @@ class WatchOMoviesProvider : MainAPI() {
                 CatEntry("/videos/tags/473/double-penetration/", "Double Penetration", "Tubes")
             ),
 
-            // 4. XMoviesForYou (All 53 -> Studios 18+)
+            // 6. XMoviesForYou (All 53 -> Studios 18+)
             "xmoviesforyou" to listOf(
                 CatEntry("/studio/assparade", "Studio: AssParade", "Studios 18+"),
                 CatEntry("/studio/bangbus", "Studio: BangBus", "Studios 18+"),
@@ -395,16 +458,16 @@ class WatchOMoviesProvider : MainAPI() {
                 CatEntry("/studio/wicked", "Studio: Wicked", "Studios 18+")
             ),
 
-            // 5. XXXTime (5 Studio Channels -> Studios 18+, 43 Categories/Models -> Tubes)
+            // 7. XXXTime (5 Studio Channels -> Studios 18+, 43 Categories/Models -> Tubes = 48)
             "xxxtime" to listOf(
-                // Studios 18+
+                // Studios 18+ (5)
                 CatEntry("/channels.php?ch=Teamskeet", "Teamskeet", "Studios 18+"),
                 CatEntry("/channels.php?ch=Cum4k", "Cum4k", "Studios 18+"),
                 CatEntry("/channels.php?ch=Brazzers", "Brazzers", "Studios 18+"),
                 CatEntry("/channels.php?ch=Mature4k", "Mature4k", "Studios 18+"),
                 CatEntry("/channels.php?ch=Mom4k", "Mom4k", "Studios 18+"),
 
-                // Tubes & Models
+                // Tubes & Models (43)
                 CatEntry("/categories.php?c=Big+Ass", "Big Ass", "Tubes"),
                 CatEntry("/categories.php?c=Redhead", "Redhead", "Tubes"),
                 CatEntry("/model.php?p=Abigail-Morris", "Abigail Morris", "Tubes"),
@@ -450,9 +513,9 @@ class WatchOMoviesProvider : MainAPI() {
                 CatEntry("/model.php?p=Zoey-Uso", "Zoey Uso", "Tubes")
             ),
 
-            // 6. WatchPorn (14 Studios -> Studios 18+, 2 Feeds -> Tubes)
+            // 8. WatchPorn (14 Studios -> Studios 18+, 2 Feeds -> Tubes = 16)
             "watchporn" to listOf(
-                // Studios 18+
+                // Studios 18+ (14)
                 CatEntry("/categories/primalfetish/", "PrimalFetish", "Studios 18+"),
                 CatEntry("/categories/brazzersexxtra/", "BrazzersExxtra", "Studios 18+"),
                 CatEntry("/categories/julesjordan/", "JulesJordan", "Studios 18+"),
@@ -468,14 +531,14 @@ class WatchOMoviesProvider : MainAPI() {
                 CatEntry("/categories/blacked/", "Blacked", "Studios 18+"),
                 CatEntry("/categories/bangbus/", "BangBus", "Studios 18+"),
 
-                // Tubes
+                // Tubes (2)
                 CatEntry("/top-rated/", "Top Rated", "Tubes"),
                 CatEntry("/most-popular/", "Most Popular", "Tubes")
             ),
 
-            // 7. Taboodaddy (10 Studios -> Studios 18+, 13 Tube Categories -> Tubes)
+            // 9. Taboodaddy (10 Studios -> Studios 18+, 13 Tubes -> Tubes = 23)
             "taboodaddy" to listOf(
-                // Studios 18+
+                // Studios 18+ (10)
                 CatEntry("category/brazzers", "Brazzers", "Studios 18+"),
                 CatEntry("category/bangbros", "BangBros", "Studios 18+"),
                 CatEntry("category/blacked", "Blacked", "Studios 18+"),
@@ -487,7 +550,7 @@ class WatchOMoviesProvider : MainAPI() {
                 CatEntry("category/puretaboo", "Pure Taboo", "Studios 18+"),
                 CatEntry("category/realitykings", "Realitykings", "Studios 18+"),
 
-                // Tubes
+                // Tubes (13)
                 CatEntry("", "Latest", "Tubes"),
                 CatEntry("category/analmom", "Anal Mom", "Tubes"),
                 CatEntry("category/bdsm", "BDSM", "Tubes"),
@@ -503,12 +566,12 @@ class WatchOMoviesProvider : MainAPI() {
                 CatEntry("category/taboo", "Taboo", "Tubes")
             ),
 
-            // 8. Pvzija / BluMovies (1 Indian OTT + 39 International Studios + 2 Tube Feeds)
+            // 10. Pvzija / BluMovies (1 Indian OTT + 39 Studios 18+ + 2 Tubes = 42)
             "pvzija" to listOf(
-                // Indian OTT
+                // Indian OTT (1)
                 CatEntry("director/indian-x/page/%d/", "Indian X", "Indian OTT"),
 
-                // Studios 18+
+                // Studios 18+ (39)
                 CatEntry("director/21-sextury-video-pulse/page/%d/", "21 Sextury Video Pulse", "Studios 18+"),
                 CatEntry("director/adult-source-media/page/%d/", "Adult Source Media", "Studios 18+"),
                 CatEntry("director/bang/page/%d/", "Bang", "Studios 18+"),
@@ -549,12 +612,12 @@ class WatchOMoviesProvider : MainAPI() {
                 CatEntry("director/will-tile-xxx/page/%d/", "Will Tile XXX", "Studios 18+"),
                 CatEntry("director/xprime/page/%d/", "Xprime", "Studios 18+"),
 
-                // Tubes
+                // Tubes (2)
                 CatEntry("page/%d/", "New Movies", "Tubes"),
                 CatEntry("page/%d/?filter=most-viewed", "Popular Movies", "Tubes")
             ),
 
-            // 9. Free Porn Videos (All 25 -> Tubes)
+            // 11. Free Porn Videos (All 25 -> Tubes)
             "freepornvideos" to listOf(
                 CatEntry("/trending-porn-videos", "Trending Porn Videos", "Tubes"),
                 CatEntry("/most-popular/week", "Most Popular", "Tubes"),
@@ -586,10 +649,10 @@ class WatchOMoviesProvider : MainAPI() {
     }
 
     /**
-     * Arranges Home Page strictly in 3 unified sections:
-     * 1. All Indian Hindi OTT categories together first
-     * 2. All International Studios (18+) together second
-     * 3. All Tubes & Models together third
+     * Strictly separated into 3 sequential sections:
+     * 1. Indian OTT (144 categories — ONLY Indian)
+     * 2. International Studios 18+ (161 categories — ONLY Studios)
+     * 3. Tubes & Models (102 categories — ONLY Tubes)
      */
     override val mainPage: List<MainPageData>
         get() {
@@ -602,7 +665,7 @@ class WatchOMoviesProvider : MainAPI() {
             val finalRows = mutableListOf<MainPageData>()
 
             for (grp in orderedGroups) {
-                if (!WatchOMoviesSettingsDialog.isCategoryGroupAllowed(grp)) continue
+                if (!WatchOMoviesSettingsDialog.isGroupEnabled(grp)) continue
                 val groupRows = mutableListOf<MainPageData>()
                 val prefixIcon = when (grp) {
                     "Indian OTT" -> "🇮🇳"
@@ -637,7 +700,7 @@ class WatchOMoviesProvider : MainAPI() {
         }
 
     // =========================================================================
-    // Unified getMainPage Router
+    // Unified getMainPage Router (All 11 Servers)
     // =========================================================================
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val (srvKey, path) = decodeRoute(request.data)
@@ -652,8 +715,31 @@ class WatchOMoviesProvider : MainAPI() {
                     else -> "$base/$path/page/$page/"
                 }
                 val html = getPage(pageUrl)?.text ?: return newHomePageResponse(request.name, emptyList(), false)
-                val items = extractWatchOMoviesItems(html, base)
+                val items = extractPsyPlayItems(html, base, "watchomovies")
                 newHomePageResponse(HomePageList(request.name, items, false), hasNext = items.isNotEmpty())
+            }
+
+            "prmovies" -> {
+                val cleanPath = path.trim('/')
+                val pageUrl = if (page <= 1) "$base/$cleanPath/" else "$base/$cleanPath/page/$page/"
+                val html = getPage(pageUrl, extraHeaders = prmoviesHeaders())?.text ?: return newHomePageResponse(request.name, emptyList(), false)
+                val items = extractPsyPlayItems(html, base, "prmovies")
+                newHomePageResponse(HomePageList(request.name, items, false), hasNext = items.isNotEmpty())
+            }
+
+            "aagmaal" -> {
+                val cleanPath = path.trim('/')
+                val pageUrl = when {
+                    cleanPath.isEmpty() && page <= 1 -> "$base/"
+                    cleanPath.isEmpty() -> "$base/page/$page/"
+                    page <= 1 -> "$base/$cleanPath/"
+                    else -> "$base/$cleanPath/page/$page/"
+                }
+                val html = getPage(pageUrl)?.text ?: return newHomePageResponse(request.name, emptyList(), false)
+                val doc = Jsoup.parse(html)
+                val items = doc.select("article.loop-video").mapNotNull { it.toAagmaalResult(base) }
+                val hasNext = doc.select("link[rel=next]").isNotEmpty() && items.isNotEmpty()
+                newHomePageResponse(HomePageList(request.name, items, true), hasNext = hasNext)
             }
 
             "tellyhd" -> {
@@ -732,7 +818,7 @@ class WatchOMoviesProvider : MainAPI() {
     }
 
     // =========================================================================
-    // Multi-Server Concurrent Search
+    // Multi-Server Concurrent Search (All 11 Servers)
     // =========================================================================
     override suspend fun search(query: String): List<SearchResponse> = search(query, 1).items
 
@@ -776,7 +862,18 @@ class WatchOMoviesProvider : MainAPI() {
             "watchomovies" -> {
                 val url = if (page <= 1) "$base/?s=$encoded" else "$base/page/$page/?s=$encoded"
                 val html = getPage(url)?.text ?: return emptyList()
-                extractWatchOMoviesItems(html, base)
+                extractPsyPlayItems(html, base, "watchomovies")
+            }
+            "prmovies" -> {
+                val qPlus = query.replace(" ", "+")
+                val url = if (page <= 1) "$base/?s=$qPlus" else "$base/page/$page/?s=$qPlus"
+                val html = getPage(url, extraHeaders = prmoviesHeaders())?.text ?: return emptyList()
+                extractPsyPlayItems(html, base, "prmovies", prefixTag = "[Prmovies]")
+            }
+            "aagmaal" -> {
+                val url = "$base/page/$page/?s=$encoded"
+                val html = getPage(url)?.text ?: return emptyList()
+                Jsoup.parse(html).select("article.loop-video").mapNotNull { it.toAagmaalResult(base, prefixTag = true) }
             }
             "tellyhd" -> {
                 val qPlus = encoded.replace("+", "%20")
@@ -845,7 +942,9 @@ class WatchOMoviesProvider : MainAPI() {
         val base = srvBase(srvKey)
 
         return when (srvKey) {
-            "watchomovies" -> loadWatchOMovies(url, realRaw, base)
+            "watchomovies" -> loadPsyPlay(url, realRaw, base, "watchomovies", emptyMap())
+            "prmovies" -> loadPsyPlay(url, realRaw, base, "prmovies", prmoviesHeaders())
+            "aagmaal" -> loadAagmaal(url, realRaw, base)
             "tellyhd" -> loadTellyHd(url, realRaw, base)
             "brazzpw" -> loadBrazzPw(url, realRaw, base)
             "xmoviesforyou" -> loadXMoviesForYou(url, realRaw, base)
@@ -854,7 +953,7 @@ class WatchOMoviesProvider : MainAPI() {
             "taboodaddy" -> loadTabooDaddy(url, realRaw, base)
             "pvzija" -> loadPvzija(url, realRaw, base)
             "freepornvideos" -> loadFreePornVideos(url, realRaw, base)
-            else -> loadWatchOMovies(url, realRaw, base)
+            else -> loadPsyPlay(url, realRaw, base, "watchomovies", emptyMap())
         }
     }
 
@@ -871,7 +970,9 @@ class WatchOMoviesProvider : MainAPI() {
         val base = srvBase(srvKey)
 
         return when (srvKey) {
-            "watchomovies" -> loadLinksWatchOMovies(realData, base, subtitleCallback, callback)
+            "watchomovies" -> loadLinksPsyPlay(realData, base, "WatchOMovies", emptyMap(), subtitleCallback, callback)
+            "prmovies" -> loadLinksPsyPlay(realData, base, "Prmovies", prmoviesHeaders(), subtitleCallback, callback)
+            "aagmaal" -> loadLinksAagmaal(realData, subtitleCallback, callback)
             "tellyhd" -> loadLinksTellyHd(realData, base, subtitleCallback, callback)
             "brazzpw" -> loadLinksBrazzPw(realData, base, subtitleCallback, callback)
             "xmoviesforyou" -> loadLinksXMoviesForYou(realData, base, subtitleCallback, callback)
@@ -898,7 +999,11 @@ class WatchOMoviesProvider : MainAPI() {
         }
     }
 
-    private fun extractWatchOMoviesItems(html: String, base: String): List<SearchResponse> {
+    private fun prmoviesHeaders(): Map<String, String> = mapOf(
+        "Cookie" to "_ga=GA1.1.1629448397.1794059276; domain-alert=1; fpestid=qKEJFcR_c3RLFa6Kn--eeRQW2dShUUkgk5lB1Hx76DaGCwYwnn5wDmCy7qWmMUlFPnD5Zw; _ga_7BWGJ9MXSS=GS2.1.s1794059275\$o1\$g1\$t1794059680\$j60\$l0\$h0"
+    )
+
+    private fun extractPsyPlayItems(html: String, base: String, srvKey: String, prefixTag: String? = null): List<SearchResponse> {
         val doc = Jsoup.parse(html)
         val items = mutableListOf<SearchResponse>()
 
@@ -910,7 +1015,8 @@ class WatchOMoviesProvider : MainAPI() {
                 ?: card.selectFirst(".mli-info h2, h2, h3")?.text()
                 ?: card.selectFirst("img")?.attr("alt"))?.trim() ?: ""
             if (rawTitle.isBlank()) continue
-            val title = fixTitle(rawTitle).trim()
+            val cleanTitle = fixTitle(rawTitle).trim()
+            val title = if (prefixTag != null) "$prefixTag $cleanTitle" else cleanTitle
 
             val thumb = card.selectFirst("img.mli-thumb") ?: card.selectFirst("img")
             val poster = resolveFullUrl(
@@ -922,9 +1028,9 @@ class WatchOMoviesProvider : MainAPI() {
             )
 
             val isSeries = url.contains("/series/", true) ||
-                Regex("""(?i)\bseason\s*\d|\bepisode\s*\d|\bs\d{1,2}\b""").containsMatchIn(title)
+                Regex("""(?i)\bseason\s*\d|\bepisode\s*\d|\bs\d{1,2}\b""").containsMatchIn(cleanTitle)
 
-            val route = encodeRoute("watchomovies", url)
+            val route = encodeRoute(srvKey, url)
             items.add(
                 if (isSeries) newTvSeriesSearchResponse(title, route, TvType.TvSeries) { this.posterUrl = poster }
                 else newMovieSearchResponse(title, route, TvType.Movie) { this.posterUrl = poster }
@@ -938,7 +1044,8 @@ class WatchOMoviesProvider : MainAPI() {
                 val rawTitle = (card.selectFirst(".title, h2, h3, h4, .name")?.text()
                     ?: a.attr("title").takeIf { it.isNotBlank() } ?: a.text()).trim()
                 if (rawTitle.isBlank()) continue
-                val title = fixTitle(rawTitle).trim()
+                val cleanTitle = fixTitle(rawTitle).trim()
+                val title = if (prefixTag != null) "$prefixTag $cleanTitle" else cleanTitle
                 val img = card.selectFirst("img")
                 val poster = resolveFullUrl(
                     base,
@@ -946,11 +1053,27 @@ class WatchOMoviesProvider : MainAPI() {
                         ?: img?.attr("data-src")?.takeIf { it.isNotBlank() }
                         ?: img?.attr("src")?.takeIf { it.isNotBlank() }
                 )
-                val route = encodeRoute("watchomovies", url)
+                val route = encodeRoute(srvKey, url)
                 items.add(newMovieSearchResponse(title, route, TvType.Movie) { this.posterUrl = poster })
             }
         }
         return items.distinctBy { it.url }
+    }
+
+    private fun Element.toAagmaalResult(base: String, prefixTag: Boolean = false): SearchResponse? {
+        val anchor = selectFirst("a") ?: return null
+        val url = resolveFullUrl(base, anchor.attr("href")) ?: return null
+        val rawTitle = anchor.attr("title").takeIf { it.isNotBlank() } ?: anchor.text()
+        if (rawTitle.isBlank()) return null
+        val clean = fixTitle(rawTitle).trim()
+        val title = if (prefixTag) "[Aagmaal] $clean" else clean
+        val img = selectFirst("img")
+        val imageUrl = img?.attr("data-src")?.takeIf { it.isNotBlank() }
+            ?: img?.attr("src")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
+
+        return newMovieSearchResponse(title, encodeRoute("aagmaal", url), TvType.NSFW) {
+            this.posterUrl = resolveFullUrl(base, imageUrl)
+        }
     }
 
     private fun tellyHeaders(): Map<String, String> = mapOf(
@@ -1101,8 +1224,14 @@ class WatchOMoviesProvider : MainAPI() {
     // =========================================================================
     // Individual Server Load Implementations
     // =========================================================================
-    private suspend fun loadWatchOMovies(routeUrl: String, url: String, base: String): LoadResponse {
-        val html = getPage(url)?.text ?: throw ErrorLoadingException("Failed to load WatchOMovies page")
+    private suspend fun loadPsyPlay(
+        routeUrl: String,
+        url: String,
+        base: String,
+        srvKey: String,
+        extraHeaders: Map<String, String>
+    ): LoadResponse {
+        val html = getPage(url, extraHeaders = extraHeaders)?.text ?: throw ErrorLoadingException("Failed to load $srvKey page")
         val doc = Jsoup.parse(html)
 
         val title = doc.selectFirst("h3[itemprop=name]")?.text()?.trim()
@@ -1124,7 +1253,9 @@ class WatchOMoviesProvider : MainAPI() {
             ?: Regex("""\b(19|20)\d{2}\b""").find(title)?.groupValues?.get(0)?.toIntOrNull()
         val tags = doc.select(".mvici-left a[href*=/genre/], .tags a, .genres a, a[href*='/tag/'], a[href*='/director/']")
             .mapNotNull { it.text().trim().ifBlank { null } }.distinct()
-        val recommendations = extractWatchOMoviesItems(html, base).filter { it.url != routeUrl }
+        val duration = doc.selectFirst(".mvici-right span[itemprop=duration]")?.text()?.trim()
+            ?.let { Regex("""(\d+)""").find(it)?.groupValues?.get(1)?.toIntOrNull() }
+        val recommendations = extractPsyPlayItems(html, base, srvKey).filter { it.url != routeUrl }
 
         if (url.contains("/series/", true) || doc.select("#seasons .tvseason, .les-content a").isNotEmpty()) {
             val episodes = mutableListOf<Episode>()
@@ -1136,7 +1267,7 @@ class WatchOMoviesProvider : MainAPI() {
                     val label = a.text().trim()
                     val epNum = Regex("""(?i)\bepisode\s*[-:]?\s*(\d+)""").find(label)?.groupValues?.get(1)?.toIntOrNull()
                     episodes.add(
-                        newEpisode(encodeRoute("watchomovies", href)) {
+                        newEpisode(encodeRoute(srvKey, href)) {
                             this.name = label.ifBlank { "Episode ${episodes.size + 1}" }
                             this.season = season
                             this.episode = epNum ?: (episodes.size + 1)
@@ -1146,13 +1277,42 @@ class WatchOMoviesProvider : MainAPI() {
             }
             if (episodes.isNotEmpty()) {
                 return newTvSeriesLoadResponse(title, routeUrl, TvType.TvSeries, episodes) {
-                    this.posterUrl = poster; this.plot = plot; this.year = year; this.tags = tags; this.recommendations = recommendations
+                    this.posterUrl = poster; this.plot = plot; this.year = year; this.tags = tags; this.duration = duration; this.recommendations = recommendations
                 }
             }
         }
 
+        val isSeries = Regex("""(?i)\bseason\s*\d|\bepisode\s*\d|\bs\d{1,2}\b""").containsMatchIn(title)
+        if (isSeries) {
+            return newTvSeriesLoadResponse(
+                title,
+                routeUrl,
+                TvType.TvSeries,
+                listOf(newEpisode(routeUrl) { this.name = title; this.season = 1; this.episode = 1 })
+            ) {
+                this.posterUrl = poster; this.plot = plot; this.year = year; this.tags = tags; this.duration = duration; this.recommendations = recommendations
+            }
+        }
+
         return newMovieLoadResponse(title, routeUrl, TvType.Movie, routeUrl) {
-            this.posterUrl = poster; this.plot = plot; this.year = year; this.tags = tags; this.recommendations = recommendations
+            this.posterUrl = poster; this.plot = plot; this.year = year; this.tags = tags; this.duration = duration; this.recommendations = recommendations
+        }
+    }
+
+    private suspend fun loadAagmaal(routeUrl: String, url: String, base: String): LoadResponse {
+        val html = getPage(url)?.text ?: throw ErrorLoadingException("Failed to load Aagmaal page")
+        val doc = Jsoup.parse(html)
+        val title = doc.selectFirst("meta[property=og:title]")?.attr("content")?.trim()
+            ?: doc.selectFirst("h1")?.text()?.trim() ?: "Aagmaal Video"
+        val poster = resolveFullUrl(base, doc.selectFirst("meta[property=og:image]")?.attr("content"))
+        val description = doc.selectFirst("meta[property=og:description]")?.attr("content")?.trim()
+        val streamLink = doc.selectFirst("iframe[data-litespeed-src]")?.attr("data-litespeed-src")?.takeIf { it.isNotBlank() }
+            ?: doc.selectFirst("iframe[src]")?.attr("src")?.takeIf { it.isNotBlank() }
+            ?: url
+
+        return newMovieLoadResponse(title, routeUrl, TvType.NSFW, encodeRoute("aagmaal", streamLink)) {
+            this.posterUrl = poster
+            this.plot = description
         }
     }
 
@@ -1323,15 +1483,17 @@ class WatchOMoviesProvider : MainAPI() {
     // =========================================================================
     // Individual Server LoadLinks Implementations
     // =========================================================================
-    private suspend fun loadLinksWatchOMovies(
+    private suspend fun loadLinksPsyPlay(
         data: String,
         base: String,
+        sourceLabel: String,
+        extraHeaders: Map<String, String>,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         var found = false
         val pageUrl = data.substringBefore("#").substringBefore("?")
-        val html = getPage(pageUrl)?.text ?: return false
+        val html = getPage(pageUrl, extraHeaders = extraHeaders)?.text ?: return false
         val doc = Jsoup.parse(html)
 
         val tabLabels = mutableMapOf<String, String>()
@@ -1346,29 +1508,45 @@ class WatchOMoviesProvider : MainAPI() {
             val src = iframe.attr("src").ifBlank { iframe.attr("data-src") }
             if (src.isBlank() || src.contains("ads", true)) continue
             val tabId = iframe.parents().firstOrNull { it.id().startsWith("tab") }?.id()
-            val label = tabLabels[tabId] ?: "WatchOMovies"
+            val label = tabLabels[tabId] ?: sourceLabel
 
             when {
                 src.contains("speedostream", true) && src.contains("embed-") -> {
-                    if (resolveSpeedostream(src, base, label, callback)) found = true
+                    if (resolveSpeedostream(src, base, sourceLabel, label, extraHeaders, callback)) found = true
                 }
                 src.contains("vidsrc", true) -> {
-                    if (resolveVidsrc(src, base, pageUrl, callback)) found = true
+                    if (resolveVidsrc(src, base, sourceLabel, pageUrl, extraHeaders, callback)) found = true
                 }
                 else -> {
                     if (loadExtractor(resolveFullUrl(base, src) ?: src, pageUrl, subtitleCallback, callback)) found = true
                 }
             }
         }
+
+        if (!found) {
+            for (a in doc.select("#list-downloads a[href*=speedostream], .links_table a[href*=speedostream]")) {
+                val href = a.attr("href")
+                if (href.isBlank() || href.contains("embed-")) continue
+                val label = a.selectFirst(".serv_tit")?.text()?.ifBlank { null } ?: sourceLabel
+                if (resolveSpeedostream(href, base, sourceLabel, "$label • Download", extraHeaders, callback)) found = true
+            }
+        }
         return found
     }
 
-    private suspend fun resolveSpeedostream(embedUrl: String, base: String, label: String, callback: (ExtractorLink) -> Unit): Boolean {
+    private suspend fun resolveSpeedostream(
+        embedUrl: String,
+        base: String,
+        sourceLabel: String,
+        label: String,
+        extraHeaders: Map<String, String>,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
         if (!WatchOMoviesSettingsDialog.isExtractorEnabled("speedostream")) return false
         return try {
             val clean = resolveFullUrl(base, embedUrl) ?: return false
             val host = try { Uri.parse(clean).host ?: "speedostream1.com" } catch (e: Exception) { "speedostream1.com" }
-            val r = getPage(clean, referer = "https://$host/") ?: return false
+            val r = getPage(clean, referer = "https://$host/", extraHeaders = extraHeaders) ?: return false
             val text = r.text
             if (text.contains("Embeds disabled", true)) return false
             val m3u8 = Regex("""file\s*:\s*["']([^"']+\.m3u8[^"']*)["']""").find(text)?.groupValues?.get(1)
@@ -1376,7 +1554,7 @@ class WatchOMoviesProvider : MainAPI() {
                 ?: return false
 
             callback(
-                newExtractorLink("WatchOMovies", label.take(40), m3u8, ExtractorLinkType.M3U8) {
+                newExtractorLink(sourceLabel, label.take(40), m3u8, ExtractorLinkType.M3U8) {
                     this.quality = Qualities.Unknown.value
                     this.referer = "https://$host/"
                     this.headers = mapOf("User-Agent" to userAgent, "Referer" to "https://$host/")
@@ -1390,18 +1568,25 @@ class WatchOMoviesProvider : MainAPI() {
         }
     }
 
-    private suspend fun resolveVidsrc(embedUrl: String, base: String, referer: String, callback: (ExtractorLink) -> Unit): Boolean {
+    private suspend fun resolveVidsrc(
+        embedUrl: String,
+        base: String,
+        sourceLabel: String,
+        referer: String,
+        extraHeaders: Map<String, String>,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
         if (!WatchOMoviesSettingsDialog.isExtractorEnabled("speedostream")) return false
         return try {
             val clean = resolveFullUrl(base, embedUrl) ?: return false
-            val r1 = getPage(clean, referer = referer) ?: return false
+            val r1 = getPage(clean, referer = referer, extraHeaders = extraHeaders) ?: return false
             val target = Jsoup.parse(r1.text).selectFirst("iframe[src]")?.attr("src")?.let { resolveFullUrl(clean, it) } ?: return false
-            val r2 = getPage(target, referer = clean) ?: return false
+            val r2 = getPage(target, referer = clean, extraHeaders = extraHeaders) ?: return false
             val m3u8 = Regex("""file\s*:\s*["']([^"']+\.m3u8[^"']*)["']""").find(r2.text)?.groupValues?.get(1)
                 ?: Regex("""https:[^"' ]+\.m3u8[^"' ]*""").find(r2.text)?.groupValues?.get(0) ?: return false
 
             callback(
-                newExtractorLink("WatchOMovies", "WatchOMovies • VidSrc", m3u8, ExtractorLinkType.M3U8) {
+                newExtractorLink(sourceLabel, "$sourceLabel • VidSrc", m3u8, ExtractorLinkType.M3U8) {
                     this.quality = Qualities.Unknown.value
                     this.referer = target
                     this.headers = mapOf("User-Agent" to userAgent, "Referer" to target)
@@ -1413,6 +1598,19 @@ class WatchOMoviesProvider : MainAPI() {
         } catch (_: Exception) {
             false
         }
+    }
+
+    private suspend fun loadLinksAagmaal(
+        data: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        if (data.isBlank()) return false
+        val host = data.substringAfter("//").substringBefore("/")
+        if (host.contains("vidhost", true)) {
+            if (VidhostExtractor.resolve("Aagmaal", data, callback)) return true
+        }
+        return loadExtractor(data, referer = data, subtitleCallback, callback)
     }
 
     private suspend fun loadLinksTellyHd(
