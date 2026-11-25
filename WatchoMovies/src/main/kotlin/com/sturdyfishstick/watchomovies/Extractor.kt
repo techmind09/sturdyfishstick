@@ -1,9 +1,7 @@
 package com.sturdyfishstick.watchomovies
 
-import android.util.Log
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.extractors.LuluStream
 import com.lagradost.cloudstream3.extractors.VidhideExtractor
 import com.lagradost.cloudstream3.network.WebViewResolver
 import com.lagradost.cloudstream3.utils.*
@@ -13,6 +11,52 @@ import java.util.TreeMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.abs
+
+// =========================================================================
+// 0. Vidhost Stream API Extractor (Aagmaal)
+// =========================================================================
+object VidhostExtractor {
+    data class StreamResponse(val streaming_url: String? = null)
+
+    suspend fun resolve(
+        sourceName: String,
+        embedUrl: String,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        if (!WatchOMoviesSettingsDialog.isExtractorEnabled("vidhost")) return false
+        return try {
+            val host = embedUrl.substringAfter("//").substringBefore("/")
+            val filecode = embedUrl.trimEnd('/').substringAfterLast('/')
+            if (host.isBlank() || filecode.isBlank()) return false
+
+            val response = app.post(
+                "https://$host/api/stream",
+                json = mapOf(
+                    "filecode" to filecode,
+                    "device" to "web",
+                    "codecs" to emptyList<String>()
+                ),
+                referer = embedUrl
+            ).parsedSafe<StreamResponse>()
+
+            val stream = response?.streaming_url?.takeIf { it.isNotBlank() } ?: return false
+            callback.invoke(
+                newExtractorLink(
+                    source = sourceName,
+                    name = sourceName,
+                    url = stream,
+                    type = ExtractorLinkType.M3U8
+                ) {
+                    this.referer = embedUrl
+                    this.quality = Qualities.Unknown.value
+                }
+            )
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+}
 
 // =========================================================================
 // 1. LuluStream / LuluVid / LuluVdo / LuluPvp Extractors (XXXTime)
@@ -424,3 +468,4 @@ open class Bigwarp : ExtractorApi() {
         return null
     }
 }
+
