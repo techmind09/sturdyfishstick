@@ -1,4 +1,4 @@
-package com.sturdyfishstick.watchomoviesindian
+package com.sturdyfishstick.watchomovies
 
 import android.annotation.SuppressLint
 import android.app.Activity
